@@ -56,8 +56,8 @@ for level = 1:max_level
     [x_J3] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb);
     
     % estimate errors
-    [eta4s,~] = estimateCREtaSides(f,g,u4Db,x,c4n,n4e,n4sDb,n4sNb);
-    [eta4s_J3,~] = estimateCREtaSides(f,g,u4Db,x_J3,c4n,n4e,n4sDb,n4sNb);
+    [eta4s,~] = estimateCREtaSides_noNeummann(f,g,u4Db,x,c4n,n4e,n4sDb);
+    [eta4s_J3,~] = estimateCREtaSides_noNeumann(f,g,u4Db,x_J3,c4n,n4e,n4sDb);
 
     error4lvl(level) = sqrt(sum(eta4s));
     error4lvl_J3(level) = sqrt(sum(eta4s_J3));
