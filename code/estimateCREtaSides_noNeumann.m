@@ -28,8 +28,8 @@ function [eta4s,n4s] = estimateCREtaSides_noNeumann(f,g,u4Db,x,c4n,n4e,n4sDb)
     end
     
     %% Compute the L2-norm of the jumps and weigh them with length4s.
-    eta4sNormal = P0NormalJump(c4n,n4e,n4sDb,gradU,g);
-    eta4sTangent = P0TangentJump(c4n,n4e,n4sDb,gradU,u4Db);
+    eta4sNormal = P0NormalJump_noNeumann(c4n,n4e,n4sDb,gradU,g);
+    eta4sTangent = P0TangentJump_noNeumann(c4n,n4e,n4sDb,gradU,u4Db);
     eta4s = ((eta4sNormal+eta4sTangent).*length4s).^2;
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

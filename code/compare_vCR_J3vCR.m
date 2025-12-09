@@ -53,10 +53,10 @@ for level = 1:max_level
     u4Db = @(x) 0;
     
     [x, nrDof4lvl(level)] = solveCRPoisson(f,g,u4Db,c4n,n4e,n4sDb,n4sNb);
-    [x_J3] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb);
+    [x_J3] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb); %reuse stiffness matrix
     
     % estimate errors
-    [eta4s,~] = estimateCREtaSides_noNeummann(f,g,u4Db,x,c4n,n4e,n4sDb);
+    [eta4s,~] = estimateCREtaSides_noNeumann(f,g,u4Db,x,c4n,n4e,n4sDb);
     [eta4s_J3,~] = estimateCREtaSides_noNeumann(f,g,u4Db,x_J3,c4n,n4e,n4sDb);
 
     error4lvl(level) = sqrt(sum(eta4s));
@@ -66,5 +66,5 @@ end
 % plot convergence
 figure;
 plotConvergence(nrDof4lvl, error4lvl, "F(vCR)")
-figure;
+hold on;
 plotConvergence(nrDof4lvl, error4lvl_J3, "F(J3 vCR)")

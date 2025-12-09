@@ -23,7 +23,7 @@ volume_coefficients_sum = sum(volume_coefficients, 2);
 % compute integral on every triangle
 piecewise_integral = area4e .* ... 
     ( averaging_coefficients_sum / 3 + bubble_coefficients_sum / 2 ) ...
-    + ( 9 * alpha - 3 * beta ) * volume_coefficients_sum / 20;
+    + sqrt(area4e) * ( 9 * alpha - 3 * beta ) .* volume_coefficients_sum / 20;
 
 % sum up the piecewise integrals
 integral_value = sum(piecewise_integral,1);
