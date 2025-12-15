@@ -30,7 +30,7 @@ for level = 1:max_level
     nr_elements = size(n4e,1);
     
     %% compute rhs
-    % initialize rhs-vector tilde(b)
+    % initialize rhs-vector b
     b = zeros(nr_sides,1);
     for j = setdiff(1:nr_sides, n4sDb)
         %define vCR = psi_j
