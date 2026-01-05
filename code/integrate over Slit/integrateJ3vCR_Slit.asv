@@ -5,12 +5,21 @@ function [integral_value] = integrateJ3vCR_Slit(c4n,n4s,averaging_coefficients,b
 %   n4s - nodes for sides
 %   averaging_coefficients - from computeJ1vCR
 %   bubble_coefficients - from compute J2vCR
-%   sides_slit - [nr_slitSides x 1] with index of the sides that lie on
-%   the slit (according to n4s)
 %% comments
 %  1. the volume coefficients are not needed because they are zero along
 %  the edges
 %  2. we assume that the mesh "matches" the slit
+
+
+% find nodes and sides that are on the slit
+% mask = find(c4n(:,2) == 0);
+% nodes_slit = find(c4n(mask,1) >= 0);
+% sides_slit = zeros(2^level, 1);
+% nr_vertices = size(c4n,1);
+% for i = 1:nr_vertices
+%     sides_slit(i) = s4n(nodes_slit(i), nodes(i+1))
+% 
+% end
 
 %% compute length4s_slit - the length for each side on the slit
 % initialize lengths4s_slit
@@ -23,10 +32,9 @@ for i = 1:nr_slitSides
 end
 
 % compute the piecewise integral (along each side)
-% derivation of the formula in: "calculations_integrateJ3vCR_slit.pdf"
+% derivation of the formula in: "integrateJ3vCR_slit.
 integral_value_pw = length4s_slit .* ...
     (sum(averaging_coefficients(n4s(sides_slit)),2) / 2 ...
     + bubble_coefficients(sides_slit));
 
-% sum up the piecewise integrals
 integral_value = sum(integral_value_pw);

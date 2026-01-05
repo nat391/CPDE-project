@@ -26,6 +26,11 @@ switch test_case
     case 4
         vCR = zeros(size(n4s,1),1);
         vCR(2) = 1; % case 4: all zeros except for edge number 2, which is set to 1
+         % calculate expected result
+        alpha = sqrt(20 / 27) * (sqrt(7) + 1);
+        beta = sqrt(20 / 27) * 3 * sqrt(7);
+        area_T = 1/32;
+        expected_result = sqrt(area_T) * (11/180 * beta - alpha/12);
 end
 
 
