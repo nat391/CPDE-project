@@ -1,4 +1,4 @@
-function [integral_value] = integrateJ3vCR(averaging_coefficients, bubble_coefficients, volume_coefficients, c4n, n4e)
+function [integral_value] = integrateJ3vCR(s4e,area4e,averaging_coefficients, bubble_coefficients, volume_coefficients, c4n, n4e)
 %% function to compute the integral of J3vCR over the whole triangulation
 %  Input:  c4n,n4e                  - mesh
 %          averaging_coefficients   - coeffs from J1; size: nr_vertices x 1
@@ -7,9 +7,7 @@ function [integral_value] = integrateJ3vCR(averaging_coefficients, bubble_coeffi
 %
 %  Output: integral_value     - the exact integral of J3vCR over the domain
 
-% compute sides4elements and area4elements matrix
-s4e = computeS4e(n4e);
-area4e = computeArea4e(c4n, n4e);
+
 
 % define constants alpha and beta
 alpha = sqrt(20 / 27) * (sqrt(7) + 1);

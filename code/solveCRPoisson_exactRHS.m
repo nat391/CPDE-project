@@ -1,4 +1,4 @@
-function [x,nrDof,A] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb)
+function [x,nrDof,A,b] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb)
 %% solveCR - solve the Possion problem using the CR element.
 % Solves the Poisson problem for given right-hand side f and 
 % Neumann boundary condition g on the domain given by c4n and n4e.
@@ -57,11 +57,10 @@ function [x,nrDof,A] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb)
     %% Neumann boundary conditions
     length4NbSides = computeLength4s(c4n,n4sNb);
     mid4NbSides = computeMid4s(c4n,n4sNb);
-    b(NbSides) = b(NbSides) + length4NbSides .* g(mid4NbSides);
+
     %% Dirichlet boundary conditions
     x = zeros(nrSides,1);
     x(DbSides) = u4Db(computeMid4s(c4n, n4sDb));
-    b = b - A * x;
     %% solve the algebraic equation
     x(dof) = A(dof,dof) \ b(dof);
     

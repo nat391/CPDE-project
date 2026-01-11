@@ -1,4 +1,4 @@
-function [volume_coefficients] = computeJ3vCR(c4n,n4e,vCR, averaging_coefficients, bubble_coefficients)
+function [volume_coefficients] = computeJ3vCR(n4e,s4e,area4e,vCR, averaging_coefficients, bubble_coefficients)
 % This function applies the J3 operator onto a given Crouzeix-Raviart
 % function vCR. 
 % Input: c4n, n4e, vCR, averaging coefficients and bubble coefficients
@@ -6,12 +6,9 @@ function [volume_coefficients] = computeJ3vCR(c4n,n4e,vCR, averaging_coefficient
 %   The derivation of the formula is outlined in
 %   "calculations_J3operator.pdf"
 
-% compute the |cal(T)| x 3 "sides for elements" matrix
-s4e = computeS4e(n4e);
 % reorder matrix such that side j is opposite to node j 
 % (local enumeration with j=1,2,3)
 s4e = s4e(:,[2 3 1]);
-Area4e = computeArea4e(c4n,n4e);
 
 % define constants alpha and beta
 alpha = sqrt(20 / 27) * (sqrt(7) + 1);
@@ -44,7 +41,7 @@ P3_case1_term = beta * bubble_coefficients(s4e);
 P3_case2_term = beta * bubble_coefficients_other;
 
 % using integration formula for barycentric coordinates
-volume_coefficients = sqrt(Area4e) .* ... 
+volume_coefficients = sqrt(area4e) .* ... 
     (P0_and_P1_term / 3 ...
      + P2_case1_term / 12 ...
      + P2_case2_term / 6 ...
