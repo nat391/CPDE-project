@@ -1,5 +1,5 @@
-function CRPoisson_lineload(max_level)
-% analysing the integration over a slit with J3vCR
+function CRPoisson_lineload(max_level, lineload)
+% analysing the Poisson-model problem with a line-load with J3vCR
 
 %% initialization
 
@@ -10,9 +10,9 @@ s4e = computeS4e(n4e);
 [p4n, counts_per_node] = computeP4n(n4e,size(c4n,1));
 
 % find nodes and sides on the slit
-nodes_slit = find(c4n(:,1)>=0 & c4n(:,2)==0);
-sides_slit = find( all( ismember(n4s, nodes_slit), 2 ) );
-n4sSlit = n4s(sides_slit,:);
+nodes_line = find(c4n(:,1)>=0 & c4n(:,2)==0);
+sides_line = find( all( ismember(n4s, nodes_line), 2 ) );
+n4s_line = n4s(sides_line,:);
 
 % get degrees of freedom -> non-dirichlet sides
 n4s = sort(n4s,2);
@@ -27,6 +27,7 @@ nrDof4lvl = zeros(max_level,1);
 % set Dirichlet and Neumann boundary conditions
 u4Db = @(x) 0;
 g = @(x) 0;
+f = @(x) 1;
 
 for level = 1:max_level
 
@@ -50,31 +51,31 @@ for level = 1:max_level
         bubble_coefficients = computeJ2vCR(n4s,vCR,averaging_coefficients);
         
         % intergrate J3vCR over the slit
-        b(j) = integrateJ3vCR_slit(c4n,n4s,averaging_coefficients,bubble_coefficients,sides_slit);
+        b(j) = integrateJ3vCR_lineload(c4n,n4s_line,sides_line,averaging_coefficients,bubble_coefficients,lineload);
     end
     
     [x, nrDof4lvl(level)] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb);
 
     %% estimate
-    %[eta4s, ~] = estimateCREtaSides_noNeumann(f,g,u4Db,x,c4n,n4e,n4sDb);
-    %error4lvl(level) = sqrt(sum(eta4s));
-    grad4e  = zeros(nr_elements,2);
-    for elem = 1 : nr_elements
-        grads = 4 * ([1,1,1;c4n(n4e(elem,:),:)'] \ [0,0;eye(2)]);
-        grad4e(elem,:) = x(s4e(elem,:))'*grads;
-    end
-    eta4e = estimateSigmaAveragingP1(c4n,n4e,grad4e);
-    error4lvl(level) = sqrt(sum(eta4e));
+    [eta4s, ~] = estimateCREtaSides_noNeumann(f,g,u4Db,x,c4n,n4e,n4sDb);
+    error4lvl(level) = sqrt(sum(eta4s));
+    % grad4e  = zeros(nr_elements,2);
+    % for elem = 1 : nr_elements
+    %     grads = 4 * ([1,1,1;c4n(n4e(elem,:),:)'] \ [0,0;eye(2)]);
+    %     grad4e(elem,:) = x(s4e(elem,:))'*grads;
+    % end
+    % eta4e = estimateSigmaAveragingP1(c4n,n4e,grad4e);
+    %error4lvl(level) = sqrt(sum(eta4e));
+    error4lvl(level) = sqrt(sum(eta4s));
 
     if(level < max_level)
         %% refine
-        [c4n,n4e,n4sDb,n4sNb,n4sSlit] = refineUniformRed_slit(c4n,n4e,n4s,n4sDb,n4sNb,n4sSlit);
+        [c4n,n4e,n4sDb,n4sNb,n4s_line] = refineUniformRed_slit(c4n,n4e,n4s,n4sDb,n4sNb,n4s_line);
         n4s = computeN4s(n4e); %optimization idea: compute n4s in refinement step
-        n4s = sort(n4s,2);
-        n4sSlit = sort(n4sSlit,2);
-        sides_slit = find(ismember(n4s,n4sSlit,'rows'));
         s4e = computeS4e(n4e);
         [p4n,counts_per_node] = computeP4n(n4e,size(c4n,1));
+        sides_line = computeSides_line(n4s,n4s_line);
+        
 
         % get new degrees of freedom -> non-dirichlet sides
         n4s = sort(n4s,2);
@@ -89,7 +90,7 @@ end
 figure;
 plotConvergence(nrDof4lvl, error4lvl, "F(J3vCR)")
 hold on
-loglog(nrDof4lvl,nrDof4lvl.^(-0.5))
+loglog(nrDof4lvl,nrDof4lvl.^(-0.333))
 figure;
 plotCR(c4n,n4e,x,'CR-solution')
 

@@ -22,7 +22,7 @@ function [eta4s,n4s] = estimateCREtaSides_noNeumann(f,g,u4Db,x,c4n,n4e,n4sDb)
     gradU    = zeros(size(n4e,1),2);
     
     %% Compute gradient.
-    for elem = 1:size(n4e,1);
+    for elem = 1:size(n4e,1)
         grads = [c4n(n4e(elem,:),:)'; 1 1 1] \ [-2 0; 0 -2; 0 0];
         gradU(elem,:) = x(s4e(elem,:))' * grads([3 1 2],:);
     end
