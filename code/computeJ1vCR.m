@@ -1,4 +1,4 @@
-function [averaging_coefficients] = computeJ1vCR(s4e,p4n,n4sDb,counts_per_node,vCR)
+function [averaging_coefficients] = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR)
 % this function computes the J1 smoothing of a Crouzeix-Raviart function.
 % It averages the nodal values from neighboring triangles and returns a
 % vector of length size(c4n,1)
@@ -16,7 +16,7 @@ Z_long   = Z(:);      % same ordering
 
 % Sum Z contributions for each node (vectorized via sparse mat-vec)
 % we can do: sums(node) = sum of Z_long at positions where node occurs
-sums_per_node = p4n * Z_long;        % (nr_nodes x 1)
+sums_per_node = pos4n * Z_long;        % (nr_nodes x 1)
 
 % Compute average
 averaging_coefficients = sums_per_node ./ counts_per_node;

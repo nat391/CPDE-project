@@ -12,7 +12,7 @@ s4e = s4e(:,[2 3 1]);
 
 % define constants alpha and beta
 alpha = sqrt(20 / 27) * (sqrt(7) + 1);
-beta = sqrt(20 / 27) * 3 * sqrt(7);
+beta = sqrt(20 / 3) * sqrt(7);
 
 % sum up the coefficients for each triangle and copy into three columns
 vCR_sum = sum(vCR(s4e),2) * ones(1,3);

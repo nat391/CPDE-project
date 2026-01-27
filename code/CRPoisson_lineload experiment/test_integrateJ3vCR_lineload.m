@@ -3,7 +3,7 @@ function tests = test_integrateJ3vCR_lineload
 end
 
 function setupOnce(testCase)
-    refinement_lvl = 2;
+    refinement_lvl = 5;
     [c4n,n4e,n4sDb] = loadGeometry('BigSquare',refinement_lvl);
     
     % find nodes that are on the slit
@@ -16,7 +16,7 @@ function setupOnce(testCase)
 
     % other useful matrices
     s4e = computeS4e(n4e);
-    [p4n, counts_per_node] = computeP4n(n4e,size(c4n,1));
+    [pos4n, counts_per_node] = computePos4n(n4e,size(c4n,1));
 
     % store everything
     testCase.TestData.c4n        = c4n;
@@ -25,9 +25,8 @@ function setupOnce(testCase)
     testCase.TestData.n4sDb     = n4sDb;
     testCase.TestData.sides_line = sides_line;
     testCase.TestData.n4s_line = n4s_line;
-    testCase.TestData.p4n = p4n;
     testCase.TestData.s4e = s4e;
-    testCase.TestData.p4n = p4n;
+    testCase.TestData.pos4n = pos4n;
     testCase.TestData.counts_per_node = counts_per_node;
 end
 
@@ -41,7 +40,7 @@ function testZeroInput(testCase)
     sides_line = testCase.TestData.sides_line;
     n4s_line = testCase.TestData.n4s_line;
     s4e = testCase.TestData.s4e;
-    p4n = testCase.TestData.p4n;
+    pos4n = testCase.TestData.pos4n;
     counts_per_node = testCase.TestData.counts_per_node;
     
 
@@ -52,7 +51,7 @@ function testZeroInput(testCase)
     nr_sides = size(n4s,1);
     vCR = zeros(nr_sides,1);
 
-    averaging_coefficients = computeJ1vCR(s4e,p4n,n4sDb,counts_per_node,vCR);
+    averaging_coefficients = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR);
     bubble_coefficients   = computeJ2vCR(n4s,vCR,averaging_coefficients);
 
     actSolution = integrateJ3vCR_lineload(...
@@ -76,7 +75,7 @@ function testOneInput(testCase)
     sides_line = testCase.TestData.sides_line;
     n4s_line = testCase.TestData.n4s_line;
     s4e = testCase.TestData.s4e;
-    p4n = testCase.TestData.p4n;
+    pos4n = testCase.TestData.pos4n;
     counts_per_node = testCase.TestData.counts_per_node;
 
     nr_sides = size(n4s,1);
@@ -90,7 +89,7 @@ function testOneInput(testCase)
     vCR = zeros(nr_sides);
     vCR(~isMatch) = 1;
 
-    averaging_coefficients = computeJ1vCR(s4e,p4n,n4sDb,counts_per_node,vCR);
+    averaging_coefficients = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR);
     bubble_coefficients   = computeJ2vCR(n4s,vCR,averaging_coefficients);
 
     actSolution = integrateJ3vCR_lineload(...

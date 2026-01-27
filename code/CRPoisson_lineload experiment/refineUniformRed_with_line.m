@@ -1,4 +1,4 @@
-function [c4nNew,n4eNew,n4sDbNew,n4sNbNew,n4sSlitNew] = refineUniformRed_slit(c4n,n4e,n4s,n4sDb,n4sNb,n4sSlit)
+function [c4nNew,n4eNew,n4sDbNew,n4sNbNew,n4sSlitNew] = refineUniformRed_with_line(c4n,n4e,n4s,n4sDb,n4sNb,n4sSlit)
 %% refineUniformRed - Refine every element the "red" way.
 %   refineUniformRed(c4n, n4e, n4sDb, n4sNb) Refines a given mesh uniformly
 %       using the red refinement. For details on data structures and

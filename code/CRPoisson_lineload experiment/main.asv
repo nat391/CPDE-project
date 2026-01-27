@@ -1,0 +1,19 @@
+function main
+max_level = 5;
+
+% first experiment
+lineload = @(x) 1;
+degree = 0;
+CRPoisson_lineload(max_level,lineload,degree, "l_1");
+
+% second experiment
+lineload = @(x) 1-2*;
+degree = 2;
+CRPoisson_lineload(max_level,lineload,degree,"l_2" );
+
+%third experiment
+lineload = @(x) -exp(-x);
+degree = 10;
+CRPoisson_lineload(max_level,lineload,degree,"l_3");
+
+end

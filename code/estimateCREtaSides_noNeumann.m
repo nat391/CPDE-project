@@ -1,10 +1,9 @@
-function [eta4s,n4s] = estimateCREtaSides_noNeumann(f,g,u4Db,x,c4n,n4e,n4sDb)
+function [eta4s,n4s] = estimateCREtaSides_noNeumann(g,u4Db,x,c4n,n4e,n4sDb)
 %% estimateCREtaSides - error estimator for CR element
 % Estimate the energy error of the CR finite element solution by the
 % jumps of the discrete solution's tangents along the sides.
 %
-% Input:     f	       right-hand side of the problem definition
-%            g         Neumann boundary condition
+% Input:     g         Neumann boundary condition
 %            u4Db      Dirichlet boundary condition
 %            x         CR basis coefficients of u given by solve
 %            c4n       coordinates for the nodes of the mesh

@@ -1,0 +1,609 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{subcaption} % for subfigures
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[backend=bibtex,style=numeric,sorting=nyt]{biblatex}
+\usepackage{float}
+\usepackage{comment}
+%\usepackage{scrhack}
+%\usepackage{algorithm}
+%\usepackage{algpseudocode}
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{gray!70},
+  stringstyle=\color{orange!60!black},
+  numbers=left, numberstyle=\tiny, numbersep=6pt,
+  frame=single, rulecolor=\color{black!30},
+  breaklines=true, breakatwhitespace=true,
+  showstringspaces=false,
+  tabsize=2,
+  inputencoding=utf8, extendedchars=true,
+  literate=
+   {ä}{{\"a}}1 {ö}{{\"o}}1 {ü}{{\"u}}1 {ß}{{\ss}}1
+   {Ä}{{\"A}}1 {Ö}{{\"O}}1 {Ü}{{\"U}}1
+}
+\lstset{style=py}
+
+\geometry{margin=2.5cm}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Projektübung WiSe 25/26}
+\lhead{Numerische Lösung des Poisson-Problems}
+\cfoot{\thepage}
+
+\addbibresource{literatur.bib}
+
+\title{\textbf{Numerische Lösung des Poisson-Problems\\mit Finite Differenzen und SOR-Verfahren}}
+\author{Projektübung --- Humboldt-Universität Berlin}
+\author{
+  Abdul Matin Mohammadi \qquad Nathan Arnaud \\
+  \textit{Gruppe IMP-Do-40}
+}
+\setlength{\parindent}{0pt}
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\newpage
+
+\section{Einleitung}
+\label{sec:einleitung}
+% Motivation 
+% Einordnung, Problemstellung
+Bereits im vorangegangenen Arbeitsblatt wurde das Poisson-Problem unter Verwendung direkter Verfahren, konkret der LU-Zerlegung, behandelt. Dabei zeigte sich jedoch eine fundamentale Problematik: Die bei der Diskretisierung entstehenden Matrizen sind zwar dünnbesetzt, ihre LU-Zerlegung bewahrt diese Eigenschaft jedoch im Allgemeinen nicht („Fill-in“). Dies führt dazu, dass der theoretische Speicherplatzvorteil dünnbesetzter Matrizen bei direkten Verfahren verloren geht. Um diese Limitierung zu überwinden nutzen wir hier iterativer Lösungsverfahren. Diese bieten für große Systeme entscheidende Vorteile, da der Rechenaufwand pro Iteration vergleichsweise gering ist und die Dünnbesetztheit der Matrix effizient genutzt werden kann. Das Ziel dieses Berichts ist dreigeteilt:Implementierung: Es erfolgt die algorithmische Umsetzung des Successive Over-Relaxation (SOR) Verfahrens oder des Verfahrens der konjugierten Gradienten (CG) zur Lösung des Systems $Ax=b$.Analyse der Konvergenz: Ein Schwerpunkt liegt auf der Untersuchung des Einflusses der Abbruchbedingungen auf die Qualität der Lösung. Hierbei wird analysiert, wie sich die Wahl des Toleranzparameters $\epsilon$ im Verhältnis zur Diskretisierungsfeinheit $h$ auf das Konvergenzverhalten auswirkt.
+\section{Theorie}
+\label{sec:theorie}
+\subsection{Numerische Behandlung des Poisson-Problems - kurze Wiederholung}
+Ziel ist es, das Poisson-Problem auf dem Einheitsquadrat mit Null-Randdaten zu lösen. Das heißt, wir suchen eine Funktion \(u \in C^2(\Omega; \mathbb{R})\), die folgende Bedingung erfüllt:
+
+\begin{equation}
+\begin{cases}
+-\Delta u = f & \text{in } \Omega \\
+u = 0 &\text{auf } \partial\Omega
+\end{cases}
+\label{eq:poisson}
+\end{equation}
+
+wobei \(\Omega = (0,1)^2\) und \(f\) eine beliebige Funktion in \(L^2(\Omega)\).\cite{Projektbericht2025}.
+Durch eine Diskretisierung des Gebiets \(\Omega\) in ein äquidistantes Gitter mit Schrittweite \(h = 1/n\) und des Laplace-Operators  \(\Delta\) mithilfe finiter Differenzen erhält man das lineare Gleichungssystem:
+
+\begin{equation}
+A \hat{u} = h^2 b
+\label{eq:lgs}
+\end{equation}
+
+wobei \(A\) eine dünn besetzte SPD Matrix, % Quelle hinzufügen
+\(\hat{u} \in \mathbb{R}^{(n-1)^2}\) die Approximation der Lösung an den Diskretisierungspunkten und \(b_m = f(x_m)\) ist. 
+
+\subsection{Lösung des linearen Gleichungssystems mit dem SOR-Verfahren}
+
+Das SOR-Verfahren (Successive over-relaxation) ist ein iteratives Verfahren zur Lösung von linearen Gleichungssystemen. Es ist eine Variante der Gauß-Seidel Methode mit einem zusätzlichen Relaxations-Faktor \(\omega\), der eine schnellere Konvergenz ermöglicht. 
+% vielleicht mehr zu iterativen Verfahren 
+Man betrachtet die Zerlegung der Matrix \(A = L + D + U\) in untere und obere Dreiecksmatrizen \(L\) und \(U\) sowie der Diagonalmatrix \(D\). Es gilt: 
+\begin{align*}
+    Ax = b &\iff \omega (L + D + U) x = \omega b\\
+    &\iff (\omega L + D) x = \omega b - \left( \omega U + (\omega - 1) D\right) x 
+\end{align*}
+und für ein gegebenes \(x^{(k)}\) lautet die SOR-Iterationsvorschrift dann: 
+\begin{align}
+    x^{(k+1)} &:= (\omega L + D)^{-1} \left( \omega b - \left(\omega U + (\omega - 1) D\right) x^{(k)} \right)\\
+    & =: T_{\omega} x^{(k)} + c
+\end{align}
+
+% mehr infos zu SOR?
+
+\subsubsection{Algorithmus}
+Mit Vorwärtssubstitution kann die Invertierung von \(\omega L + D\) vermieden werden und man kann die Iterierte \(x^{(k+1)}\) kompenentenweise berechnen zu: 
+\begin{equation}
+    x^{(k+1)}_i = (1-\omega) x^{(k)}_i + \frac{\omega}{a_{ii}} \left(b_i - \sum_{j>i} a_{ij} x^{(k)}_j - \sum_{j<i} a_{ij} x^{(k)}_j \right)
+\end{equation}
+
+%pseudo code? 
+\begin{comment}
+\begin{algorithm}
+\caption{Successive Over-Relaxation (SOR)}
+\begin{algorithmic}[1]
+\Require $A, b, \omega$
+\Ensure $\phi$
+\State Choose an initial guess $\phi$
+\Repeat
+    \For{$i = 1$ to $n$}
+        \State $\sigma \gets 0$
+        \For{$j = 1$ to $n$}
+            \If{$j \neq i$}
+                \State $\sigma \gets \sigma + a_{ij}\phi_j$
+            \EndIf
+        \EndFor
+        \State $\phi_i \gets (1-\omega)\phi_i + \omega\,\dfrac{b_i - \sigma}{a_{ii}}$
+    \EndFor
+\Until{convergence is reached}
+\end{algorithmic}
+\end{algorithm}
+\end{comment}
+
+Für die konkrete Implementierung sind die zwei Parameter Startvektor \(x_0\) und Relaxations-Faktor \(\omega\) zu wählen, sowie ein Abbruchskriterium zur Terminierung des Algorithmus. Relevant für die Effizienz des Verfahrens sind vor allem die Wahl des Relaxations-Faktors und der Abbruchskriterien. Diese werden im Experimentierteil untersucht. 
+% experimentierteil direkt referenzieren
+% wieso ist die Wahl von x0 nicht relevant?
+\subsubsection{Konvergenzraten und Wahl des Relaxations-Faktors}
+
+Die Konvergenzgeschwindigkeit eines stationären Iterationsverfahrens wird durch den Spektralradius der zugehörigen Iterationsmatrix bestimmt, für die Lösung \(x^\ast\) und den Fehler \(e^{(k)} = x^{(k)} - x^\ast\) gilt:
+\[
+e^{(k+1)} = T_\omega e^{(k)}, \qquad 
+\|e^{(k)}\| \le \rho(T_\omega)^k \|e^{(0)}\|,
+\]
+wobei \(\rho(T_\omega)\) den Spektralradius von \(T_\omega\) bezeichnet. Konvergenz liegt genau dann vor, wenn \(\rho(T_\omega) < 1\). %Quelle angeben
+
+\\
+
+Für das diskretisierte Poisson-Problem lassen sich die Eigenwerte \(\mu\) von \(T_{\omega}\) direkt aus den Eigenwerten \(\lambda\) der Jacobi-Iterationsmatrix \(T_J\) bestimmen mittels: 
+\[\mu^2 - (2-\omega)\lambda \mu + (1-\omega) = 0.\]
+Insbesondere wird für (\(\omega < 2\)) \(|\mu|\) größer, je größer \(|\lambda|\) wird.
+Die Eigenwerte von \(T_J\) sind explizit bekannt und haben die Form
+\[
+\lambda_{pq}(T_J)
+= \frac12\left( \cos(p\pi h) + \cos(q\pi h) \right),
+\qquad p,q = 1,\dots,n-1,
+\]
+Der Spektralradius ist damit
+
+\[
+\rho(T_\omega) = \frac{2-\omega}{2} \cos{(\pi h)} + \sqrt{\left( \frac{(2-\omega)^2 \cos^2(\pi h)}{4} - (1-\omega) \right)} 
+\]
+
+Der Spektralradius ist minimal wenn der Radikand verschwindet und dies führt zum optimalen Relaxationsfaktor:
+\[\omega_{\text{opt}} 
+= \frac{2}{1+\sqrt{1-\cos^2(\pi h)}}.\]
+
+Mit der Identität
+\(\sqrt{1-\cos^2(\pi h)} = \sin(\pi h) \) und der Kleinwinkelnäherung \( \sin(\pi h) \approx \pi h\) gilt für kleine \(h\):
+
+\[
+\boxed{\;
+\omega_{\text{opt}} \approx \frac{2}{1+\pi h}
+\;\approx\; 2 - 2\pi h + \mathcal{O}(h^2)
+\;}
+\]
+
+und für den minimalen Spektralradius
+
+\[
+\rho(T_{\omega_{\text{opt}}})
+= \omega_{\text{opt}} - 1
+\approx 1 - 2\pi h + \mathcal{O}(h^2).
+\]
+% quelle nennen
+Damit ist die Konvergenzrate des optimalen SOR-Verfahrens von der Größenordnung
+
+\[
+1 - \rho(T_{\omega_{\text{opt}}}) = \mathcal{O}(h).
+\]
+
+Um den Fehler um einen konstanten Faktor zu reduzieren, werden daher etwa
+
+\[
+\boxed{k \sim \frac{1}{1-\rho(T_{\omega_{\text{opt}}})} = \mathcal{O}(h^{-1}) = \mathcal{O}(n)}
+\]
+Im Vergleich dazu benötigen Jacobi- und Gauß-Seidel-Verfahren etwa \(\mathcal{O}(n^2)\) Iterationen. Der optimal gewählte Relaxationsfaktor reduziert die Rechenzeit somit erheblich.
+
+
+\subsubsection{Wahl der Abbruchskriterien}
+
+Für die praktische Anwendung des SOR-Verfahrens ist die Wahl geeigneter Abbruchkriterien entscheidend, um einerseits eine hinreichend genaue Lösung zu erhalten und andererseits unnötige Rechenzeit zu vermeiden. In der vorliegenden Implementierung werden drei Abbruchkriterien verwendet.
+
+\paragraph{Maximale Iterationszahl.}
+Das Kriterium \texttt{max\_iter} begrenzt die Anzahl der Iterationen nach oben und verhindert ein endloses Weiterrechnen bei ungünstiger Wahl des Relaxationsfaktors oder bei numerischen Problemen. Dieses Kriterium sollte also so gewählt werden, dass es im Regelfall nicht der Abbruchsgrunnd ist.
+
+\paragraph{Fehlertoleranz.}
+Mit dem Parameter \texttt{eps} wird eine Schranke für den Fehler in der Maximumsnorm vorgegeben:
+\[
+\|u - u^{(k)}_{\text{SOR}}\|_\infty < \texttt{eps}.
+\]
+Dieses Kriterium ist das aussagekräftigste, da es direkt die Qualität der berechneten Lösung misst gegenüber der exakten Lösung \(u\) misst. Die Wahl von \texttt{eps} stellt einen Kompromiss zwischen Genauigkeit und Rechenaufwand dar. Genauere Überlegung folgen in den nächsen Kapiteln. 
+% genauer sein
+
+\paragraph{Änderung der Iterierten.}
+Das Kriterium \texttt{var\_x} misst die maximale Änderung zwischen zwei aufeinanderfolgenden Iterationen:
+\[
+\|x^{(k+1)} - x^{(k)}\|_\infty < \texttt{var\_x}.
+\]
+Dieses Abbruchkriterium ist in realistischen Anwendungen besonders relevant, da es ohne Kenntnis der exakten Lösung auskommt. Kleine Änderungen der Iterierten deuten auf eine weitgehende Stabilisierung des Verfahrens hin und sind ein praktisches Indiz für Konvergenz.
+
+
+\section{Numerische Experimente und Auswertung}
+\label{sec:experimente}
+
+In diesem Abschnitt präsentieren wir die numerischen Resultate zu Serie~3. Alle Berechnungen verwenden die exakte Testlösung \(u_\kappa\) aus \cite{Projektbericht2025} und die dazugehörige rechte Seite \(f_\kappa\).
+\subsection{Konvergenz}
+Zunächst betrachten wir die Konvergenz der Iterierten des SOR-Verfahrens für ein festes \(n\). Hierbei haben wir \(n = 41, 51, 81\) betrachtet und erhalten folgende Abildungen: 
+
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_a_error_evolution_sor_n41.png}
+  \label{fig:conv-41}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_a_error_evolution_sor_n51.png}
+  \label{fig:conv-51}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_a_error_evolution_sor_n81.png}
+  \label{fig:conv-81}
+\end{subfigure}
+\caption{Fehlerentwicklung für verschiedene Diskretisierungen}
+\label{fig:conv-compare}
+\end{figure}
+
+% bei den Plots ist etwas falsch -> n=51 braucht mehr iterationen als n=81
+% außerdem: Referenzgeraden plotten
+
+
+\subsection{Einfluss von \(\epsilon\)}
+Da der Fehler der Iterierter zur exakten Lösung ohnehin durch den Diskretisierungfehler beschränkt ist, liegt es nahe bei groberen Diskretisierung früher abzubrechen. Wir untersuchen hier deshalb das Konvergenzverhalten für \(\epsilon = h^k\) mit \(k = -2, 0, 2, 4, 6\). Dabei erhalten wir folgende Ergebnisse: 
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_b_eps_scaling_sor_n41.png}
+  \label{fig:conv-41}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_b_eps_scaling_sor_n51.png}
+  \label{fig:conv-51}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_b_eps_scaling_sor_n81.png}
+  \label{fig:conv-81}
+\end{subfigure}
+\caption{Konvergenzvergleich für verschiedene \texttt{eps}}
+\label{fig:conv-compare}
+\end{figure}
+
+
+% bessere referenzgerade einplotten
+% genauere Ansicht einfügen details zu erkennen
+
+Man erkennt, dass bei \(k= -2, 0, 2\) das Verfahren sehr schnell abbricht, ohne eine sinnvolle Lösung produziert zu haben. \(k=6\) hingegen rechnet deutlich zu lange.
+
+% -> welche konvergenzrate?
+% genauer beschreiben "zu lange" und "zu schnell"
+% über die Wahl von var_x reden um früher abzubrechen -> aber vielleicht bricht man dann bei einem lokalen Minimum ab (siehe n=81)
+% grafik mit Fehler gegen n plotten
+
+Hier ist eine Tabelle zu den verschiedenen Situationen:
+% Standard parameter nennen
+
+\begin{table}[H]
+\centering
+\caption{Aufgabe 3.2(a): Basislauf SOR (Standardparameter), $\kappa=2$.}
+\label{tab:exp-a}
+\begin{tabular}{rrrrr}
+\hline
+$n$ & $N=(n-1)^2$ & Abbruchgrund & Iterationen & Endfehler $\|u-x\|_\infty$ \\
+\hline
+41 & 1600 & \texttt{eps} & 636  & $1.121\cdot 10^{-3}$ \\
+51 & 2500 & \texttt{eps} & 937  & $7.243\cdot 10^{-4}$ \\
+81 & 6400 & \texttt{eps} & 2122 & $2.862\cdot 10^{-4}$ \\
+\hline
+\end{tabular}
+\end{table}
+\begin{table}[H]
+\centering
+\caption{Aufgabe 3.2(b): Einfluss von $\varepsilon(h)=h^k$ (SOR), $\kappa=2$.}
+\label{tab:exp-b}
+\begin{tabular}{rrrrrr}
+\hline
+$n$ & $k$ & $\varepsilon(h)$ & Abbruchgrund & Iterationen & Endfehler $\|u-x\|_\infty$ \\
+\hline
+41 & $-2$ & $1.681\cdot 10^{3}$  & \texttt{eps}   & 0   & $5.871\cdot 10^{-1}$ \\
+41 & $0$  & $1.000\cdot 10^{0}$  & \texttt{eps}   & 0   & $5.871\cdot 10^{-1}$ \\
+41 & $2$  & $5.949\cdot 10^{-4}$ & \texttt{eps}   & 67  & $2.717\cdot 10^{-2}$ \\
+41 & $4$  & $3.539\cdot 10^{-7}$ & \texttt{eps}   & 436 & $1.114\cdot 10^{-3}$ \\
+41 & $6$  & $2.105\cdot 10^{-10}$& \texttt{eps}   & 852 & $1.121\cdot 10^{-3}$ \\
+\hline
+51 & $-2$ & $2.601\cdot 10^{3}$  & \texttt{eps}   & 0   & $5.870\cdot 10^{-1}$ \\
+51 & $0$  & $1.000\cdot 10^{0}$  & \texttt{eps}   & 0   & $5.870\cdot 10^{-1}$ \\
+51 & $2$  & $3.845\cdot 10^{-4}$ & \texttt{eps}   & 100 & $2.663\cdot 10^{-2}$ \\
+51 & $4$  & $1.478\cdot 10^{-7}$ & \texttt{eps}   & 703 & $7.194\cdot 10^{-4}$ \\
+51 & $6$  & $5.683\cdot 10^{-11}$& \texttt{var\_x} & 1374& $7.246\cdot 10^{-4}$ \\
+\hline
+81 & $-2$ & $6.561\cdot 10^{3}$  & \texttt{eps}   & 0   & $5.867\cdot 10^{-1}$ \\
+81 & $0$  & $1.000\cdot 10^{0}$  & \texttt{eps}   & 0   & $5.867\cdot 10^{-1}$ \\
+81 & $2$  & $1.524\cdot 10^{-4}$ & \texttt{eps}   & 242 & $2.518\cdot 10^{-2}$ \\
+81 & $4$  & $2.323\cdot 10^{-8}$ & \texttt{eps}   & 1936& $2.848\cdot 10^{-4}$ \\
+81 & $6$  & $3.541\cdot 10^{-12}$& \texttt{var\_x} & 3228& $2.871\cdot 10^{-4}$ \\
+\hline
+\end{tabular}
+\end{table}
+
+
+
+
+
+
+
+
+
+
+\subsection{Referenzgeraden zur Visualisierung der Konvergenzrate}
+
+Zur Beurteilung der Konvergenz wird der Fehler
+\[
+e_k := \|u - x^{(k)}\|_\infty
+\]
+in einem semilogarithmischen Diagramm dargestellt. Für ein linear konvergentes
+stationäres Iterationsverfahren gilt theoretisch
+\[
+e_k \le C\,\rho^k, \qquad 0<\rho<1,
+\]
+wobei $\rho=\rho(T_\omega)$ der Spektralradius der Iterationsmatrix ist. Durch
+Logarithmieren erhält man
+\[
+\log(e_k) \approx \log C + k \log \rho,
+\]
+sodass sich in der Semilog-Darstellung eine Gerade ergibt.
+
+Zur experimentellen Approximation der Konvergenzrate werden zwei frühe
+Iterationsindizes $k_0=1$ und $k_1=\min\{10,K\}$ gewählt und aus den
+zugehörigen Fehlerwerten die Steigung
+\[
+\alpha
+=
+\frac{\log(e_{k_1})-\log(e_{k_0})}{k_1-k_0}
+\]
+bestimmt. Die Referenzgerade
+\[
+\tilde e_k
+=
+e_{k_0}\exp\!\bigl(\alpha (k-k_0)\bigr)
+\]
+approximiert damit lokal den theoretischen Fehlerabfall $C\rho^k$ mit
+\[
+\rho_{\mathrm{exp}}=\exp(\alpha).
+\]
+Eine gute Übereinstimmung zwischen Fehlerkurve und Referenzgerade bestätigt die
+erwartete lineare Konvergenz; Abweichungen weisen auf Abbruchkriterien oder das
+Erreichen des Diskretisierungsniveaus hin.
+
+
+
+
+
+% Aufgabe 3.2c
+\subsection{Experimentelle Bestimmung des optimalen Relaxationsfaktors}
+\label{sec:exp-omega}
+
+Gem\"a\ss\ der Theorie aus Abschnitt~\ref{sec:theorie} h\"angt die Konvergenzgeschwindigkeit des SOR-Verfahrens
+entscheidend vom Relaxationsfaktor $\omega$ ab, da $\rho(T_\omega)$ eine Funktion von $\omega$ ist und
+Konvergenz genau dann vorliegt, wenn $\rho(T_\omega)<1$. Insbesondere wird f\"ur das diskretisierte
+Poisson-Problem erwartet, dass $\omega_{\mathrm{opt}}$ mit feinerem Gitter gegen $2$ wandert
+(vgl.\ die Herleitung von $\omega_{\text{opt}}$ \"uber $\rho(T_J)$) \cite{Rabus2025Serie3,Evans2000,Sewell2018}.
+Daher bestimmen wir $\omega_{\mathrm{opt}}\in(1,2)$ experimentell.
+
+F\"ur festes $n$ und $\kappa=2$ testen wir eine endliche Menge $\{\omega_\ell\}$; f\"ur jedes $\omega_\ell$ wird
+das LGS mit SOR gel\"ost und die ben\"otigte Iterationszahl bis zum Abbruch gemessen. Der optimale Wert wird als
+\[
+\omega_{\mathrm{opt}} \in \arg\min_{\omega_\ell}\{\text{Iterationen}(\omega_\ell)\}
+\]
+bestimmt. Da das Abbruchkriterium in diesen L\"aufen prim\"ar durch \texttt{eps} ausgel\"ost wird, ist die
+Iterationszahl hier ein direkter Proxy f\"ur die praktische Konvergenzgeschwindigkeit \cite{Rabus2025Serie3}.
+
+Abbildungen~\ref{fig:omega-scan-41}--\ref{fig:omega-scan-81} zeigen die Iterationszahl als Funktion von $\omega$.
+F\"ur $\omega\approx 1$ (nahe Gau\ss--Seidel) sind sehr viele Iterationen notwendig, was konsistent zur Theorie ist,
+da dort $\rho(T_\omega)$ nahe am Spektralradius der nicht relaxierten Verfahren liegt. In der N\"ahe eines optimalen
+Bereichs reduziert sich die Iterationszahl drastisch. F\"ur $n=81$ ist zudem sichtbar, dass bei kleinen $\omega$
+die vorgegebene Maximalzahl \texttt{max\_iter} erreicht werden kann, d.h.\ die Konvergenz ist dort zu langsam
+(Abbruch durch Sicherheitskriterium) \cite{Rabus2025Serie3}.
+
+\begin{table}[H]
+\centering
+\caption{Ergebnis der Omega-Suche (SOR) f\"ur $\kappa=2$.}
+\label{tab:omega-opt}
+\begin{tabular}{rrrrr}
+\hline
+$n$ & $N=(n-1)^2$ & $\omega_{\mathrm{opt}}$ & Iterationen bei $\omega_{\mathrm{opt}}$ & Bemerkung \\
+\hline
+41 & 1600 & 1.8821 & 165 & Minimum im Scan \\
+51 & 2500 & 1.8821 & 161 & Minimum im Scan \\
+81 & 6400 & 1.9500 & 327 & kleine $\omega$: teils \texttt{max\_iter} \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_c_sor_omega_scan_n41.png}
+  \caption{$n=41$}
+  \label{fig:omega-scan-41}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_c_sor_omega_scan_n51.png}
+  \caption{$n=51$}
+  \label{fig:omega-scan-51}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_c_sor_omega_scan_n81.png}
+  \caption{$n=81$}
+  \label{fig:omega-scan-81}
+\end{subfigure}
+\caption{Omega-Suche (SOR) f\"ur verschiedene Gittergr\"o\ss en.}
+\label{fig:omega-scan}
+\end{figure}
+
+
+\subsection{Vergleich SOR vs.\ LU-Zerlegung}
+\label{sec:exp-compare-lu}
+
+In diesem Experiment vergleichen wir SOR mit der direkten LU-Zerlegung aus Arbeitsblatt~2 hinsichtlich
+(i) Konvergenzverhalten, (ii) Laufzeit und (iii) Sparsity/Fill-in \cite{Rabus2025Serie2,Rabus2025Serie3,Projektbericht2025}.
+Dabei kn\"upfen wir an den Theorie-Teil an: SOR ist ein station\"ares Verfahren, dessen Iterationsfehler durch
+$\rho(T_\omega)$ kontrolliert wird, w\"ahrend LU eine direkte Methode ist, die eine L\"osung bis auf Rundungsfehler
+in einem Schritt liefert, jedoch Fill-in erzeugen kann \cite{Evans2000,Higham2002}.
+
+F\"ur SOR betrachten wir zwei Varianten:
+\begin{itemize}
+  \item \textbf{SOR mit festem $\varepsilon>0$} (unabh\"angig von $h$),
+  \item \textbf{SOR mit $\varepsilon(h)$} (effiziente Wahl aus Aufgabe 3.2(b), hier $\varepsilon(h)=h^4$).
+\end{itemize}
+Als Referenz wird die LU-L\"osung $x_{\mathrm{LU}}$ verwendet; deren Fehler $\|u-x_{\mathrm{LU}}\|_\infty$
+ist als horizontale Linie in den Fehlerplots eingezeichnet.
+
+\paragraph{Konvergenz und ``Knicke'' (Fehlerverlauf).}
+Abbildungen~\ref{fig:conv-41}--\ref{fig:conv-81} zeigen den Fehlerverlauf
+\[
+e_k=\|u-x^{(k)}\|_\infty
+\]
+und die LU-Referenz. F\"ur $n=41$ und $n=51$ konvergieren beide SOR-Varianten zun\"achst nahezu identisch und
+erreichen anschlie\ss end ein Plateau nahe der LU-Fehlerh\"ohe. Dieses Plateau entspricht dem im Theorie-Teil
+diskutierten \textbf{Diskretisierungsniveau}: sobald der Iterationsfehler die Gr\"o\ss enordnung des
+Diskretisierungsfehlers erreicht, bringt weiteres Iterieren bez\"uglich $\|u-x^{(k)}\|_\infty$ kaum Gewinn
+\cite{Evans2000,Sewell2018}.
+
+Die in den Kurven sichtbaren \emph{Knicke} sind dabei insbesondere durch zwei Effekte erkl\"arbar:
+\begin{enumerate}
+\item \textbf{Moden-D\"ampfung in SOR:} Als Gl\"atter d\"ampft SOR hochfrequente Fehleranteile sehr schnell, w\"ahrend
+      niederfrequente Anteile langsamer abklingen. Der Wechsel in der dominierenden Fehlerstruktur kann sich
+      im Semilog-Plot als Knick zeigen \cite{Rabus2025Serie3,Evans2000}.
+\item \textbf{Abbruchkriterium vs.\ dargestellter Fehler:} Terminiert wird anhand der Kriterien \texttt{eps} bzw.\ \texttt{var\_x},
+      geplottet wird jedoch der Fehler zur exakten L\"osung. In sp\"aten Iterationen kann das Residuum bzw.\ die
+      \"Anderung der Iterierten weiter sinken, w\"ahrend der Fehler zu $u$ aufgrund des Diskretisierungsfehlers nur noch
+      schwach reagiert. Dadurch entstehen Plateau- und Abknick-Effekte \cite{Higham2002}.
+\end{enumerate}
+
+F\"ur $n=81$ ist der Trade-off deutlich: Die $\varepsilon(h)$-Variante terminiert fr\"uher (weniger Iterationen und Zeit),
+liefert aber einen etwas gr\"o\ss eren Endfehler als LU bzw.\ SOR mit festem $\varepsilon$. Dies ist konsistent mit der
+Rolle der Abbruchkriterien aus Abschnitt~\ref{sec:theorie}: ein aggressiveres $\varepsilon(h)$ spart Rechenzeit, kann aber
+bei feineren Gittern zu fr\"uhem Abbruch f\"uhren, bevor das Diskretisierungsniveau erreicht ist \cite{Rabus2025Serie3}.
+
+\paragraph{Laufzeit und Mittelung (min. 30s).}
+Die Laufzeiten wurden gem\"a\ss\ Aufgabenstellung so oft wiederholt, bis eine Mindestlaufzeit von 30 Sekunden
+erreicht war; daraus wurden Mittelwerte gebildet \cite{Rabus2025Serie3}. Tabelle~\ref{tab:compare-lu} fasst die Resultate zusammen.
+
+\begin{table}[H]
+\centering
+\caption{Vergleich SOR vs.\ LU (gemittelte Zeiten; $\kappa=2$).}
+\label{tab:compare-lu}
+\begin{tabular}{rrrrrrr}
+\hline
+$n$ & Verfahren & Abbruch & Iter. & Endfehler $\|u-x\|_\infty$ & $\overline{t}$ [s] & Reps \\
+\hline
+41 & LU  & -- & --  & $1.121\cdot 10^{-3}$ & $0.011$ & 200 \\
+41 & SOR & fix $\varepsilon$ & 165 & $1.121\cdot 10^{-3}$ & $0.737$ & $\approx 42$ \\
+41 & SOR & $\varepsilon(h)$  & 82  & $1.121\cdot 10^{-3}$ & $0.359$ & $\approx 84$ \\
+\hline
+51 & LU  & -- & --  & $7.246\cdot 10^{-4}$ & $0.025$ & 200 \\
+51 & SOR & fix $\varepsilon$ & 161 & $7.246\cdot 10^{-4}$ & $1.170$ & $\approx 27$ \\
+51 & SOR & $\varepsilon(h)$  & 89  & $7.030\cdot 10^{-4}$ & $0.634$ & $\approx 48$ \\
+\hline
+81 & LU  & -- & --  & $2.871\cdot 10^{-4}$ & $0.146$ & 200 \\
+81 & SOR & fix $\varepsilon$ & 327 & $2.871\cdot 10^{-4}$ & $5.928$ & 6 \\
+81 & SOR & $\varepsilon(h)$  & 163 & $3.764\cdot 10^{-4}$ & $3.024$ & 11 \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Sparsity und Fill-in.}
+Ein zentraler Nachteil direkter Verfahren ist der \emph{Fill-in} in der LU-Zerlegung: obwohl $A$ d\"unn besetzt ist,
+wird $LU(A)$ deutlich dichter. Dies erh\"oht Speicherbedarf und Rechenaufwand beim Faktorisieren
+\cite{Rabus2025Serie2,Projektbericht2025}. Tabelle~\ref{tab:sparsity-fillin} zeigt die gemessenen Nichtnullzahlen.
+
+\begin{table}[H]
+\centering
+\caption{Sparsity-Vergleich: nnz$(A)$ vs.\ nnz$(LU(A))$ und Fill-in-Faktor.}
+\label{tab:sparsity-fillin}
+\begin{tabular}{rrrrr}
+\hline
+$n$ & $N$ & nnz$(A)$ & nnz$(LU(A))$ & $\frac{\mathrm{nnz}(LU(A))}{\mathrm{nnz}(A)}$ \\
+\hline
+41 & 1600 & 7840  & 125799  & $\approx 16.0$ \\
+51 & 2500 & 12300 & 245351  & $\approx 19.9$ \\
+81 & 6400 & 31680 & 1000274 & $\approx 31.6$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_d_convergence_compare_sor_n41.png}
+  \caption{$n=41$}
+  \label{fig:conv-41}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_d_convergence_compare_sor_n51.png}
+  \caption{$n=51$}
+  \label{fig:conv-51}
+\end{subfigure}\hfill
+\begin{subfigure}[t]{0.5\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{photos/it_d_convergence_compare_sor_n81.png}
+  \caption{$n=81$}
+  \label{fig:conv-81}
+\end{subfigure}
+\caption{Konvergenzvergleich (SOR vs.\ LU) f\"ur verschiedene Gittergr\"o\ss en.}
+\label{fig:conv-compare}
+\end{figure}
+
+\section{Fazit}
+\label{sec:fazit}
+
+Die numerischen Experimente zum 2D-Poisson-Problem best\"atigen die theoretischen Aussagen aus
+Abschnitt~\ref{sec:theorie} und erlauben eine klare Einordnung der untersuchten Verfahren.
+
+\paragraph{Konvergenz und Abbruchkriterien.}
+Im Basislauf (Tabelle~\ref{tab:exp-a}) steigt die ben\"otigte Iterationszahl mit wachsendem $n$
+deutlich an, da bei fester Fehlertoleranz \texttt{eps} strengere Konvergenzanforderungen erf\"ullt werden m\"ussen.
+Der Endfehler sinkt mit feinerem Gitter, bis das durch die Diskretisierung vorgegebene Niveau erreicht ist.
+Die in den Fehlerplots sichtbaren Knicke und Plateaus sind konsistent mit der Moden-D\"ampfung des SOR-Verfahrens
+und dem \"Ubergang vom Iterations- zum Diskretisierungsfehler.
+
+\paragraph{Wahl der Toleranz $\varepsilon(h)$.}
+Die Experimente aus (Tabelle~\ref{tab:exp-b}) verdeutlichen den Zielkonflikt zwischen Laufzeit und
+Genauigkeit: Zu gro\ss e $\varepsilon$ (hier $k\le 0$) f\"uhren zu sofortigem Abbruch und unbrauchbaren Ergebnissen,
+w\"ahrend zu kleine $\varepsilon$ viele Iterationen ohne nennenswerten Genauigkeitsgewinn erzwingen. Sehr strenge
+Toleranzen f\"uhren zudem h\"aufig zu einem Abbruch durch \texttt{var\_x}. Insgesamt erweist sich
+$\varepsilon(h)=h^4$ als praktikabler Kompromiss.
+
+\paragraph{Optimierung des Relaxationsfaktors.}
+Die Omega-Suche (Tabelle~\ref{tab:omega-opt}) zeigt eine deutliche Beschleunigung durch geeignete
+\"Uberrelaxation. Die optimalen Werte liegen bei $\omega_{\mathrm{opt}}\approx 1.88$ f\"ur $n=41,51$ und bei
+$\omega_{\mathrm{opt}}\approx 1.95$ f\"ur $n=81$, was mit der theoretischen Erwartung $\omega_{\mathrm{opt}}\to 2$
+f\"ur $h\to 0$ \"ubereinstimmt.
+
+\paragraph{Vergleich SOR vs.\ LU.}
+Der Vergleich mit der direkten LU-Zerlegung (Tabellen~\ref{tab:compare-lu} und
+\ref{tab:sparsity-fillin}) macht den grundlegenden Trade-off deutlich: LU liefert sehr schnelle und genaue
+L\"osungen f\"ur die betrachteten Problemgr\"o\ss en, erzeugt jedoch starkes Fill-in und damit hohen Speicherbedarf.
+SOR vermeidet Fill-in und profitiert von der D\"unnbesetztheit, ben\"otigt jedoch viele Iterationen; eine
+h-adaptive Toleranz reduziert die Laufzeit, kann bei sehr feinen Gittern aber zu fr\"uhem Abbruch f\"uhren.
+
+
+
+
+\printbibliography
+
+\end{document}
