@@ -1,0 +1,375 @@
+\documentclass{beamer}					% Document class
+
+\usepackage[english]{babel}				% Set language
+\usepackage[utf8x]{inputenc}			% Set encoding
+
+\mode<presentation>						% Set options
+{
+  \usetheme{default}					% Set theme
+  \usecolortheme{default} 				% Set colors
+  \usefonttheme{default}  				% Set font theme
+  \setbeamertemplate{caption}[numbered]	% Set caption to be numbered
+}
+
+ %Uncomment this to have the outline at the beginning of each section highlighted.
+\AtBeginSection[]
+{
+  \begin{frame}{Outline}
+    \tableofcontents[currentsection]
+  \end{frame}
+}
+
+\usepackage{graphicx}					% For including figures
+\usepackage{booktabs}					% For table rules
+\usepackage{hyperref}					% For cross-referencing
+\usepackage{amssymb}
+\usepackage{cite}
+
+\newcommand{\vCR}{v_{\mathrm{CR}}}
+\newcommand{\uCR}{u_{\mathrm{CR}}}
+\newcommand{\vC}{v_{\mathrm{C}}}
+\newcommand{\JCR}{J_{\mathrm{CR}}}
+\newcommand{\dx}{\,\mathrm{d}x}
+\newcommand{\norm}[1]{\left \lVert #1 \right \rVert}
+
+
+
+\title{Crouzeix-Raviart FEM for the Poisson problem with singular data}
+\author{Nathan Arnaud}
+\institute{Humboldt Universität zu Berlin}
+\date{\today}
+
+\begin{document}
+
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{Problem definition and motivation}
+
+\begin{frame}{Problem definition}
+Given a regular triangulation \(\mathcal{T}\) of a polygonal bounded Lipschitz domain \(\Omega \subseteq \mathbb{R}^2 \) and \( f \in L^2(\Omega)\), the discretized weak form of the PMP seeks \(\uCR \in \mathrm{CR}^1_0 (\mathcal{T})\) s.t.
+	\[
+    \int_\Omega \nabla_\mathrm{pw} \uCR  \nabla_\mathrm{pw} \vCR \dx = \int_\Omega f \vCR \dx \quad \text{for all } \vCR \in \mathrm{CR}^1_0(\mathcal{T})
+    \]
+\end{frame}
+
+\begin{frame}{Motivation}
+What about \(f \notin L^2(\Omega)\)?
+
+\begin{itemize}
+    \item point charges or concentrated forces
+    \item entry point for other, more complex PDEs
+    \item limitations of the Finite Element Method
+\end{itemize}
+ 
+\begin{block}{}
+Therefore we consider the new problem
+    \[
+    \int_\Omega \nabla_\mathrm{pw} u_\text{CR} \nabla_\mathrm{pw} v_\text{CR} \dx = \int_\Omega f v_\text{C} \dx
+    \]
+with \(\vC := J \vCR \) the conforming companion
+\end{block}
+\end{frame}
+
+\section{Results}
+
+\begin{frame}{Constant lineload}
+\centering
+\includegraphics[width=.9\textwidth]{photos/1_solutionPlot.png}
+\end{frame}
+
+\begin{frame}{Constant linelinoad}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=.8\textwidth]{photos/1_convergencePlot.png}
+\end{figure}
+\centering
+\(\eta^2 =  |E| \norm{\ell}^2_{L^2(\gamma)} + \sum_{T \in \mathcal{T}} |T| \sum_{E \in \mathcal{E}(T)}  \norm{\left[\partial \uCR / \partial s\right]_E}^2_{L^2(E)}
+\)
+\end{frame}
+\section{Conforming companion}
+\subsection{J1 Operator}
+\begin{frame}[fragile]{J1 Operator}
+
+\begin{columns}[T]
+% ---------------- LEFT COLUMN ----------------
+\begin{column}{0.48\textwidth}
+\begin{block}{Definition}
+Define \(
+J_1 : \mathrm{CR}^1_0(\mathcal{T}) \to S^1_0(\mathcal{T})\)
+by
+\[
+|\mathcal{T}(z)|^{-1}
+\sum_{T \in \mathcal{T}(z)} {\vCR|_T(z)}
+\]
+for all \( z \in \mathcal{N}(\Omega) \), plus boundary conditions.
+\end{block}
+\end{column}
+
+% ---------------- RIGHT COLUMN ----------------
+\begin{column}{0.48\textwidth}
+
+\begin{block}{(naive) MATLAB Code}
+\footnotesize
+\begin{verbatim}
+Z = sum(vCR(s4e),2) - 2*vCR(s4e);
+for node = 1:nr_nodes
+    idx = find(n4e == node);
+    sum = sum(Z(idx),'all');
+    J1(node) = sum/length(idx);
+end
+\end{verbatim}
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+\begin{frame}[fragile]{Data Structure - \texttt{pos4n}}
+
+\begin{columns}[T]
+% -------- LEFT COLUMN --------
+\begin{column}{0.48\textwidth}
+\begin{block}{Example}
+    \[
+\texttt{n4e}
+=
+\begin{bmatrix}
+3 & 1 & 2\\
+1 & 3 & 4
+\end{bmatrix}
+\]
+
+
+\[
+\texttt{pos4n}
+=
+\begin{bmatrix}
+0 & 1 & 0 & 1 & 0 & 0\\
+0 & 0 & 1 & 0 & 0 & 0\\
+1 & 0 & 0 & 0 & 1 & 0\\
+0 & 0 & 0 & 0 & 0 & 1
+\end{bmatrix}
+\]
+\end{block}
+
+
+\end{column}
+
+% -------- RIGHT COLUMN --------
+\begin{column}{0.48\textwidth}
+
+\begin{block}{MATLAB Code}
+\footnotesize
+\begin{verbatim}
+nr_positions = 3*nr_elems;
+node_idx = n4e(:);
+pos_idx = (1:nr_positions)';
+pos4n = sparse(node_idx,pos_idx,...
+            1,nr_nodes,nr_positions);
+\end{verbatim}
+\end{block}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+\begin{frame}{Illustration}
+\begin{columns}
+\begin{column}{0.49\textwidth}
+\includegraphics[width=1\textwidth]{photos/CR-basisfunction.png}
+\end{column}
+\begin{column}{0.49\textwidth}
+\includegraphics[width=1\textwidth]{photos/J1vCR.png}
+\end{column}
+% add caption
+\end{columns}
+\end{frame}
+\subsection{J2 Operator}
+\begin{frame}[fragile]{J2 Operator}
+
+\begin{columns}[T]
+% ---------------- LEFT COLUMN ----------------
+\begin{column}{0.48\textwidth}
+\begin{block}{Definition}
+Define \(
+J_2 : S^1_0(\mathcal{T}) \to S^2_0(\mathcal{T})\)
+as
+\[
+J_2 \vCR := J_1 \vCR + \sum_{E \in \mathcal{E}(\Omega)} \mathrm{b_E}\flat_E
+\]
+where \[\mathrm{b_E} := \frac{1}{|E|}\int_{E} \left( v_{CR} - J_{1} v_{CR} \right)\, \mathrm{d}s\] and \[\flat_E|_T := 6 \prod_{P \in \mathcal{N}(E)} \lambda_P \]
+\end{block}
+\end{column}
+
+% ---------------- RIGHT COLUMN ----------------
+\begin{column}{0.48\textwidth}
+
+\begin{block}{ MATLAB Code}
+\footnotesize
+\begin{verbatim}
+J2 = vCR-sum(J1(n4s),2)/2;
+\end{verbatim}
+\end{block}
+\end{column}
+\end{columns}
+\end{frame}
+\subsection{J3 Operator}
+\begin{frame}[fragile]{J3 Operator}
+\begin{block}{Definition}
+Define \(
+J_3 : \mathrm{CR}^1_0(\mathcal{T}) \to S^4_0(\mathcal{T})\)
+\[
+J_3 \vCR := J_2 \vCR
++ \sum_{T \in \mathcal{T}} \sum_{P \in \mathcal{N}(T)}
+\left(
+  \int_T \bigl( \vCR - J_2 \vCR \bigr)\, \Phi_{T,P} \dx
+\right)
+\Phi_{T,P} b_T
+\]
+where \(\Phi_{T,P} := |T|^{-1/2} (\alpha - \beta \lambda_P)\) and \(b_T := 27\prod_{P \in \mathcal{N}(T)} \lambda_P \)
+\end{block}
+\end{frame}
+\section{Lineload experiment}
+\begin{frame}{Experiment setup}
+\begin{columns}[T]
+  \begin{column}{0.43\textwidth}
+    \begin{align*}
+        \Omega &= (-1,1)^2\\[0.3cm]
+        \gamma &= (0,1) \times \{0\}\\[0.3cm]
+        f(x,y) &= \ell(x) \mathbf{1}_{\gamma}(x,y)
+    \end{align*}
+  \end{column}
+
+  \begin{column}{0.55\textwidth}
+    \centering
+    \includegraphics[width=1\linewidth]{photos/initial_triangulation.png}
+
+    \vspace{0.5em}
+    \small initial triangulation \(\mathcal{T}_0\)
+  \end{column}
+\end{columns}
+\end{frame}
+\begin{frame}[fragile]{Matlab Code}
+\begin{verbatim}
+function CRPoisson_lineload(max_level,lineload, degree)
+
+for level = 1:max_level
+% compute rhs edge-wise
+for j = dofs'
+vCR = zeros(nr_sides,1); vCR(j) = 1;
+J1 = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR);
+J2 = computeJ2vCR(n4s,vCR,J1);
+b(j) = integrateJ3vCR_lineload(...
+        c4n,n4s_line,sides_line,J1,J2,lineload,degree+2);
+end
+
+[x,ndof4level(level)] = solveCRPoisson_exactRHS(...
+                                    b,u4Db,c4n,n4e,n4sDb)
+                            
+
+\end{verbatim}
+\end{frame}
+\begin{frame}[fragile]{Matlab Code}
+\begin{verbatim}
+eta4s_jumpterm = estimateCREtaSides(...
+                    u4Db,x,c4n,n4e,n4sDb);
+eta4s_lineterm = estimate_lineterm(c4n,n4s_line,...
+                    length4s_line,lineload,degree);
+error4lvl(level) = sqrt(sum(eta4s_jumpterm)...
+                        +sum(eta4s_lineterm));
+
+[c4n,n4e,n4sDb,n4sNb,n4s_line] = ... 
+                refineUniformRed_with_line(...
+                    c4n,n4e,n4s,n4sDb,n4sNb,n4s_line);
+end
+\end{verbatim}
+\end{frame}
+\begin{frame}{\(\ell = 1\)}
+\centering
+\includegraphics[width=.9\textwidth]{photos/1_solutionPlot.png}
+\end{frame}
+\begin{frame}{\(\ell(x) = 1-2x\)}
+\centering
+\includegraphics[width=.9\textwidth]{photos/1-2x_solutionPlot.png}
+\end{frame}
+\begin{frame}{\(\ell(x) = e^{-x}\)}
+\centering
+\includegraphics[width=.9\textwidth]{photos/exp(-x)_solutionPlot.png}
+\end{frame}
+\begin{frame}{Solution Plots}
+\begin{columns}[T] % T aligns columns at the top
+
+  \begin{column}{0.33\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{photos/1_solutionPlot.png}
+  \end{column}
+
+  \begin{column}{0.33\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{photos/1-2x_solutionPlot.png}
+  \end{column}
+
+  \begin{column}{0.33\textwidth}
+    \centering
+    % Safer if you rename the file to: exp_minus_x_solutionPlot.png
+    \includegraphics[width=\linewidth]{photos/exp(-x)_solutionPlot.png}
+  \end{column}
+
+\end{columns}
+\end{frame}
+
+\begin{frame}{expected convergence rates}
+\begin{itemize}
+    \item \(\sum_{E \in \mathcal{E}(\gamma)} |E| \norm{\ell}^2_{L^2(E)}  = |E| \norm{\ell}^2_{L^2(\gamma)} \approx \mathrm{ndof}^{-1/2}\)
+    \vspace{1.2em}
+    \item for the normal PMP: \(\sum_{T \in \mathcal{T}} |T| \sum_{E \in \mathcal{E}(T)} \norm{[\partial u/\partial s]_E}^2_{L^2(E)} \approx \mathrm{ndof}^{-1} \)
+    \vspace{1.2em}
+    \item Therefore we expect a convergence rate of \(-\frac{1}{4}\) (at best)
+\end{itemize}
+\end{frame}
+
+\begin{frame}{\(\ell = 1\)}
+  \centering
+  \includegraphics[width=0.9\textwidth]{photos/1_convergencePlot.png}
+\end{frame}
+\begin{frame}{\(\ell(x) = 1 - 2x\)}
+  \centering
+  \includegraphics[width=0.9\textwidth]{photos/1-2x_convergencePlot.png}
+\end{frame}
+\begin{frame}{\(\ell(x) = e^{-x}\)}
+  \centering
+  % Safer if you rename the file to: exp_minus_x_convergencePlot.png
+  \includegraphics[width=0.9\textwidth]{photos/exp(-x)_convergencePlot.png}
+\end{frame}
+
+\section{Conclusion and outlook}
+\begin{frame}{Conclusion}
+\begin{itemize}
+    \item it works! and it looks cool :)
+    \item observed convergence rate matches expectations (\(s = -1/4\))
+    \item convergence rate is independent of lineload \(\ell \in L^2(\gamma)\)
+\end{itemize}  
+\end{frame}
+\begin{frame}{Outlook}
+\begin{itemize}
+    \item using data structures and local nature of FEM to enable the computation up to ... degrees of freedom
+    \item using adaptive mesh refinement
+    \item implement for general lines \(\gamma \subseteq \Omega\)
+    \item implement for general \(f = f_\mathrm{vol} + f_\mathrm{line}\)
+    \item solve for (\(\Omega, f\)) where exact solution \(u\) is known
+\end{itemize}
+\end{frame}
+\section{References}
+\begin{frame}[allowframebreaks]{References}
+\bibliographystyle{plain}
+\nocite{*}
+\bibliography{references}
+\end{frame}
+
+\end{document}
