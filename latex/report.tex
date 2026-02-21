@@ -1,0 +1,185 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{inputenc}
+\usepackage[ngerman]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[backend=bibtex,style=numeric,sorting=nyt]{biblatex}
+\usepackage{float}
+\usepackage{esint}
+\usepackage{hyperref}
+\lstdefinestyle{py}{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{gray!70},
+  stringstyle=\color{orange!60!black},
+  numbers=left, numberstyle=\tiny, numbersep=6pt,
+  frame=single, rulecolor=\color{black!30},
+  breaklines=true, breakatwhitespace=true,
+  showstringspaces=false,
+  tabsize=2,
+  inputencoding=utf8, extendedchars=true,
+  literate=
+   {ä}{{\"a}}1 {ö}{{\"o}}1 {ü}{{\"u}}1 {ß}{{\ss}}1
+   {Ä}{{\"A}}1 {Ö}{{\"O}}1 {Ü}{{\"U}}1
+}
+\lstset{style=py}
+
+\geometry{margin=2.5cm}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{Projektübung WiSe 25/26}
+\lhead{Numerische Lösung des Poisson-Problems}
+\cfoot{\thepage}
+
+\addbibresource{references.bib}
+
+\title{\textbf{Solving the Poisson problem for singular data with Crouzeix-Raviart FEM}}
+\author{Projektübung --- Humboldt-Universität Berlin}
+\author{ Nathan Arnaud }
+\setlength{\parindent}{0pt}
+
+\newcommand{\vCR}{v_{\mathrm{CR}}}
+\newcommand{\uCR}{u_{\mathrm{CR}}}
+\newcommand{\vC}{v_{\mathrm{C}}}
+\newcommand{\JCR}{J_{\mathrm{CR}}}
+\newcommand{\dx}{\,\mathrm{d}x}
+\newcommand{\ds}{\,\mathrm{d}s}
+\newcommand{\norm}[1]{\left \lVert #1 \right \rVert}
+\newcommand{\Ltwo}[2]{\left\lVert #1 \right\rVert_{L^2(#2)}}
+\newcommand{\enorm}[1]{\left\lvert\!\left\lvert\!\left\lvert #1 \right\rvert\!\right\rvert\!\right\rvert}
+\newcommand{\CR}{\mathrm{CR}^1_0(\Omega)}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+\newpage
+
+\section{Introduction}
+\label{sec:introduction}
+Given an open, polygonal bounded lipschitz domain \(\Omega \subseteq \mathbb{R}^2\) and \(f \in L^2(\Omega) \) we consider the classical formulation of the poisson model problem: 
+\[ -\Delta u = f \quad \text{and} \quad u = 0 \text{ on} \partial \Omega \]
+From this we derive the weak formulation 
+\[- a(u,v) = F(v) \text{for all} v \in H^1_0(\Omega) \quad \text{and} \quad u = 0 \text{ on} \partial \Omega\]
+seeking \(u \in H^1(\Omega)\) where \(F(v) := \int_\Omega fv \dx\) is a functional in \(H^{-1}(\Omega) \) and the energy scalar product \(a\) is defined as \(a(u,v) := \int_\Omega \nabla u \cdot \nabla v \dx \). This setting enlarges the space of possible solutions \(u\) but it also enlarges the space of possible right hand sides \(f\). In particular it allows the treatment of singular data such as line or point loads, first of which will be examined in this report. To solve the discrete problem with non-conforming finite elements one faces the additional task, of mapping the non-conforming test-functions into \(H^1_0(\Omega)\). This is done with a smoother \(J\) that will be discussed in the following chapter. With this the discrete problem seeks \(\uCR \in \mathrm{CR}^1_0 (\mathcal{T})\) such that: 
+\[
+    \int_\Omega \nabla_\mathrm{pw} \uCR  \nabla_\mathrm{pw} \vCR \dx = \int_\Omega f \space J\vCR \dx
+\]
+holds for all \(\vCR \in \mathrm{CR}^1_0(\mathcal{T})\). 
+
+In a more general context, the examination of this problem also functions as a doorway into solving other, more complex PDEs for singular data. Furthermore it explores the limitations of the finite element method in the sense that singular points may not be suitably refined towards. 
+\section{Theory}
+\label{sec:theorie}
+\subsection{general setup}
+Throughout this report, the setup and notation will be the following. Given an open, polygonal bounded, lipschitz domain \(\Omega\) we consider a *write here the properties that map should have* map \(\gamma : \mathbb{R} \rightarrow \mathbb{R}^2\) and the right hand side in the Poisson problem \(F(v) := \int_\gamma \ell v \ds\) for \(\ell, v \in L^2(\gamma)\). Furthermore, the quasiinterpolant \(I : H^1_0(\Omega) \rightarrow \mathrm{CR}^1_0\) such that \(Iv\) is the bestapproximation of \(v\) in \(\mathrm{CR}^1_0(\Omega)\), so in particular: \(v - Iv \perp \mathrm{CR}^1_0(\Omega)\). 
+Also, as metioned in the introduction, a smootheer \(J: \mathrm{CR}^1_0(\Omega) \rightarrow P_4(\mathcal{T})\) with the property \(IJ = \mathrm{id}\) on \(\mathrm{CR}^1_0(\Omega)\) will be used. 
+\subsection{error estimator}
+For a solution \(\uCR \in \CR\) we define the error estimator \(\eta: \mathcal{T} \rightarrow (0,\infty)\) as
+\[\eta^2(T) := |\gamma(T)| \norm{\ell}^2_{L^2(\gamma(T))} + |T|^{1/2} \sum_{E \in \mathcal{E}(T) \cap \mathcal{E}(\Omega)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)} \]
+where \(\gamma(T) := \mathrm{im}(\gamma) \cap T\) *what if \(\gamma\) is on an edge? then it is counted twice*
+\begin{theorem}\label{theorem: estimator bounds error}
+For the solution \(u\) and the discrete solution \(\uCR\) on a triangulation \(\mathcal{T}\), it holds:
+\[\enorm{u - \uCR} \le \eta(\mathcal{T})\]
+\end{theorem}
+\begin{proof}
+For a triangle \(T \in \mathcal{T}\) and the functions \(v \in H^1_0(\Omega)\), \(\vCR \in \CR\) the following inequalities hold and will be used in the proof:
+\begin{align}
+\Ltwo{v - JIv}{T} &\lesssim h_T \enorm{v - Iv}_T \\ \label{v-JIv L2bound}
+\enorm{v - JIv}_T &\lesssim \enorm{v - Iv}_T \\ \label{v-JIv enormbound}
+\enorm{v-Iv}_T &\le \enorm{v - \vCR}_T \\
+\enorm{\vCR - J\vCR}^2_\Omega &\lesssim \sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)}\norm{[\partial \vCR/\partial s]_E}^2_{L^2(E)}  \label{smoother estimate}
+\end{align}
+
+Also the generalized trace inequality in the form: 
+\begin{align}
+\Ltwo{v}{\gamma(T)}^2 \lesssim \frac{|\gamma(T)|}{h_T^2} \Ltwo{v}{T}^2 + |\gamma(T)| \enorm{v}^2_T
+\label{generalized trace inequality}
+\end{align}
+
+We start with the decompostion 
+\begin{align*}
+\enorm{u-\uCR}^2_\Omega &= a(u-\uCR, u - \uCR) \\
+&= a(u,u-J\uCR) + a(u, J\uCR - \uCR) - a(\uCR, u-\uCR)
+\end{align*}
+Using Cauchy-Schwarz and \eqref{smoother estimate}, the second term gives 
+\begin{equation}
+\begin{aligned}
+a(u,J\uCR -\uCR) &= a(u-\uCR,J\uCR -\uCR) \\
+&\le \enorm{u-\uCR}_\Omega \enorm{\uCR - J\uCR}_\Omega \\
+&\lesssim \enorm{u-\uCR}_\Omega \sqrt{\sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T) \cap \mathcal{E}(\Omega)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)}}
+\end{aligned}
+\label{second term}
+\end{equation}
+
+The difference of the first and the third term can be bounded as follows: 
+\begin{equation}
+\begin{aligned}
+a(u,u-J\uCR) - a(\uCR,u-\uCR) &= a(u,u-J\uCR) - a(\uCR, Iu-\uCR)\\
+&= \int_\gamma \ell (u-J\uCR) \ds - \int_\gamma \ell J(Iu-\uCR) \ds \\
+&= \int_\gamma \ell (u-JIu) \ds \\
+&\le \Ltwo{h_\gamma^{1/2} \ell}{\gamma} \Ltwo{h_\gamma^{-1/2}(u-JIu)}{\gamma} \\
+\end{aligned}
+\label{first and thrid term}
+\end{equation}
+Using the generalized trace inequality \eqref{generalized trace inequality} and \eqref{v-JIv L2bound}, \eqref{v-JIv enormbound} on the second factor gives: 
+\begin{equation}
+\begin{aligned}
+\Ltwo{h_\gamma^{-1/2}(u-JIu)}{\gamma} &= \left(\sum_{T \in \mathcal{T}(\gamma)} |\gamma(T)|^{-1} \Ltwo{u-JIu}{\gamma(T)}^2 \right)^{1/2} \\
+&\lesssim \left( \sum_{T \in \mathcal{T}} \frac{1}{h_T^2} \Ltwo{u-JIu}{T}^2 + \enorm{u-JIu}^2_T \right)^{1/2} \\
+&\lesssim \left(\sum_{T \in \mathcal{T}(\gamma)} \enorm{u-Iu}^2_T \right)^{1/2} \\
+&= \enorm{u-Iu}_{\mathcal{T}(\gamma)} \\
+&\le \enorm{u-\uCR}_{\Omega}
+\end{aligned}
+\label{bound on u-JIu}
+\end{equation}
+Combining \eqref{second term}, \eqref{first and thrid term}, \eqref{bound on u-JIu} and dividing by \(\enorm{u-\uCR}_\Omega\) concludes the proof. 
+
+
+\end{proof}
+
+\subsection{Smoother}
+The smoother \(J: \CR \rightarrow S^4_0(\mathcal{T})\) is defined in three steps: 
+\begin{definition}
+Given a triangulation \(\mathcal{T}\) on \(\Omega\) we define: 
+\begin{equation}
+\begin{aligned}
+J_1 : \CR &\rightarrow S^1_0(\mathcal{T}), \quad
+\vCR \mapsto \sum_{z \in \mathcal{N}(\Omega)} \left( |\mathcal{T}(z)|^{-1} \sum_{T \in \mathcal{T}(z)} {\vCR|_T(z)} \right) \psi_z \\
+J_2: \CR &\rightarrow S^2_0(\mathcal{T}), \quad \vCR \mapsto J_1 \vCR + \sum_{E \in \mathcal{E}(\Omega)} \left(\fint_{E} \left( v_{CR} - J_{1} v_{CR} \right) \ds \right) b_E\\
+J_3: \CR &\rightarrow S^4_0(\mathcal{T}), \quad \vCR \mapsto J_2 \vCR
++ \sum_{T \in \mathcal{T}} \sum_{P \in \mathcal{N}(T)}
+\left(\int_T \bigl( \vCR - J_2 \vCR \bigr)\, \Phi_{T,P} \dx \right) \Phi_{T,P} b_T
+\end{aligned}
+\end{equation}
+where \(\psi_z\) is the nodal basis function and \(b_E := 6 \prod_{P \in \mathcal{N}(E)} \lambda_P\). Also \(\Phi_{T,P} := |T|^{-1/2} (\alpha - \beta \lambda_P)\) for the constants \(\alpha := \sqrt{\frac{20}{27}} (\sqrt{7}+1)\) and \(\beta := \sqrt{\frac{140}{3}}\) and lastly \(b_T := 27\prod_{P \in \mathcal{N}(T)} \lambda_P\).
+\end{definition}
+With this definition \(J := J_3\) satisfies the properties used in the proof of \autoref{theorem: estimator bounds error}. \cite{Puttkammer2023}
+\section{MATLAB Documentation}
+\label{sec:fehler}
+
+\section{Numerische Experimente und Auswertung}
+\label{sec:experimente}
+
+\section{Experiments and results}
+\label{sec:implementation}
+\section{Interpretation}
+\section{Conclusion}
+\section{Appendix}
+
+\printbibliography
+
+\end{document}
