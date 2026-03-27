@@ -1,4 +1,4 @@
-function [eta4s,n4s] = estimateCREtaSides_noNeumann(g,u4Db,x,c4n,n4e,n4sDb)
+function [eta4s,n4s] = estimate_CRjumpterm(u4Db,x,c4n,n4e,n4sDb)
 %% estimateCREtaSides - error estimator for CR element
 % Estimate the energy error of the CR finite element solution by the
 % jumps of the discrete solution's tangents along the sides.
@@ -27,9 +27,8 @@ function [eta4s,n4s] = estimateCREtaSides_noNeumann(g,u4Db,x,c4n,n4e,n4sDb)
     end
     
     %% Compute the L2-norm of the jumps and weigh them with length4s.
-    eta4sNormal = P0NormalJump_noNeumann(c4n,n4e,n4sDb,gradU,g);
-    eta4sTangent = P0TangentJump_noNeumann(c4n,n4e,n4sDb,gradU,u4Db);
-    eta4s = ((eta4sNormal+eta4sTangent).*length4s).^2;
+    eta4sTangent = computeTangentJump(c4n,n4e,n4sDb,gradU,u4Db);
+    eta4s = (eta4sTangent.*length4s).^2;
 end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Copyright 2009-2015

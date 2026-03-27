@@ -1,10 +1,14 @@
-function [bubble_coefficients] = computeJ2vCR(n4s,vCR,averaging_coefficients)
-% this function computes the coefficients J2vCR for the J2 smoothing of a
-% Crouzeix-Raviart function vCR
-% input: n4s matrix, vCR Crouzeix-Raviart coefficient vector, 
-% averaging_coefficients vector of the J1 smoothing of vCR
+function [j2] = computeJ2vCR(n4s,vCR,averaging_coefficients)
+% this function computes the coefficients j2 of the J2 operator applied 
+% to a CR-function vCR. 
+% input: n4s             nr_sides x 2 matrix from computeN4s
+%        vCR             nr_sides long Crouzeix-Raviart coefficient vector 
+%        j1              nr_nodes long vector from computeJ1vCR
+%
+% output: j2             nr_sides long vector with the coefficients 
+%                        of degrees of freedom that J2vCR has along the edges
 
 % compute integral mean of (vCR - avCR) over edge F using midpoint rule
-bubble_coefficients = vCR - sum(averaging_coefficients(n4s),2) / 2;
+j2 = vCR - sum(averaging_coefficients(n4s),2) / 2;
 
 end

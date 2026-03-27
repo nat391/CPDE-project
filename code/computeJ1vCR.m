@@ -1,7 +1,19 @@
-function [averaging_coefficients] = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR)
-% this function computes the J1 smoothing of a Crouzeix-Raviart function.
+function [j1] = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR)
+% this function computes the coefficients of the J1 operator applied to a
+% Crouzeix-Raviart function.
 % It averages the nodal values from neighboring triangles and returns a
 % vector of length size(c4n,1)
+% inputs: s4e               nr_elems x 3 matrix from computeS4e
+%         pos4n             nr_nodes x 3nr_nodes matrix from computePos4n
+%         n4sDb             |nr_dirichtetNodes| x 2 matrix that gives the
+%                           two nodes for each boundary edge
+%         counts_per_node   nr_nodes long vector with the count of 
+%                           occurences in n4e
+%         vCR               nr_sides-long vector with coefficients 
+%                           of the CR-function at the edge-midpoints
+%
+% output: j1                nr_nodes long vector with the coefficients
+%                           of the J1 operator
 
 % reorder matrix such that side j is opposite to node j 
 % (local enumeration with j=1,2,3)
@@ -19,11 +31,11 @@ Z_long   = Z(:);      % same ordering
 sums_per_node = pos4n * Z_long;        % (nr_nodes x 1)
 
 % Compute average
-averaging_coefficients = sums_per_node ./ counts_per_node;
+j1 = sums_per_node ./ counts_per_node;
 
 
 % Enforce Dirichlet nodes to zero (if required)
 if ~isempty(n4sDb)
-    averaging_coefficients(unique(n4sDb(:))) = 0;
+    j1(unique(n4sDb(:))) = 0;
 end
 

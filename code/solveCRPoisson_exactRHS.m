@@ -1,15 +1,13 @@
-function [x,nrDof,A,b] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb)
+function [x,nrDof,A,b] = solveCRPoisson_exactRHS(b,u4Db,c4n,n4e,n4sDb)
 %% solveCR - solve the Possion problem using the CR element.
 % Solves the Poisson problem for given right-hand side f and 
 % Neumann boundary condition g on the domain given by c4n and n4e.
 %
 % Input:     b	       right-hand side F(psi_j) of the problem definition
-%            g         Neumann boundary condition
 %            u4Db      Dirichlet boundary condition
 %            c4n       coordinates for the nodes of the mesh
 %            n4e       nodes for the elements of the mesh
 %            n4sDb	   the nodes of the sides in the Dirichlet boundary
-%            n4sNb	   the nodes of the sides in the Neumann boundary
 %
 % Output:    x         basis coefficients of the numerical solution w.r.t.
 %                      the Crouzeix-Raviart basis.
@@ -27,11 +25,6 @@ function [x,nrDof,A,b] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb)
     DbSides = zeros(1,size(n4sDb,1));
     for i = 1:size(n4sDb,1)
         DbSides(i) = s4n(n4sDb(i,1),n4sDb(i,2));
-    end
-    % Neumann boundary sides
-    NbSides = zeros(1,size(n4sNb,1));
-    for i = 1:size(n4sNb,1)
-        NbSides(i) = s4n(n4sNb(i,1),n4sNb(i,2));
     end
     % degrees of freedom: one per non-Dirichlet side
     dof = setdiff(1:nrSides,DbSides);
@@ -53,10 +46,6 @@ function [x,nrDof,A,b] = solveCRPoisson_exactRHS(b,g,u4Db,c4n,n4e,n4sDb,n4sNb)
     I = [s4eT;s4eT;s4eT];
     J = [s4eT(:),s4eT(:),s4eT(:)]';
     A = sparse(I(:),J(:),Alocal(:));
-
-    %% Neumann boundary conditions
-    length4NbSides = computeLength4s(c4n,n4sNb);
-    mid4NbSides = computeMid4s(c4n,n4sNb);
 
     %% Dirichlet boundary conditions
     x = zeros(nrSides,1);

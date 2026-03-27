@@ -1,4 +1,4 @@
-function CRPoisson_lineload(max_level, lineload, degree, OPTname)
+function CRPoisson_lineload_new(max_level, lineload, degree, OPTname)
 %% This function solves the Poisson-model problem for a lineload on the rhs
 %% using the smoother J3. It also plots the convergence rates. 
 % It uses the BigSquare domain and the line [0,1] x {0}. 
@@ -77,18 +77,28 @@ for level = 1:max_level
     if(level < max_level)
         %% refine
         [c4n,n4e,n4sDb,n4sNb,n4s_line] = refineUniformRed_with_line(c4n,n4e,n4s,n4sDb,n4sNb,n4s_line);
+        nr_nodes = size(c4n,1);
         n4s = computeN4s(n4e); %optimization idea: compute n4s in refinement step
         s4e = computeS4e(n4e);
-        [pos4n,counts_per_node] = computePos4n(n4e,size(c4n,1));
+        [pos4n,counts_per_node] = computePos4n(n4e,nr_nodes);
         sides_line = computeSides_line(n4s,n4s_line);
         length4s_line = computeLength4s(c4n,n4s_line);
+        e4s = computeE4s(n4e);
+        e4n_logical = computeE4n_logical(n4e,nr_nodes);
         
 
-        % get new degrees of freedom -> non-dirichlet sides
+        % get new degrees of freedom
         n4s = sort(n4s,2);
         n4sDb = sort(n4sDb,2);
         [isMatch, ~] = ismember(n4s,n4sDb,'rows');
-        dofs = find(~isMatch);
+        DbSides = find(isMatch);
+        sides_bigpatch = computeSides_bigpatch(n4e,e4s,e4n_logical,s4e,sides_line);
+        dofs = setdiff(sides_bigpatch,DbSides);
+
+        mid_dofs = 0.5*(c4n(n4s(dofs,1),:) + c4n(n4s(dofs,2),:));
+        dist_to_line = abs(mid_dofs(:,2));     % distance to y=0
+        [max(dist_to_line) prctile(dist_to_line,99)]
+
     end
 
 end
