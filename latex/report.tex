@@ -2,6 +2,7 @@
 
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
+\usepackage{csquotes}
 
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -9,9 +10,21 @@
 
 \usepackage{geometry}
 \usepackage{graphicx}
+\usepackage{subcaption}
 \usepackage{float}
 \usepackage{esint}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
+
+\usepackage{enumitem}
+
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+    basicstyle=\ttfamily\small,
+    columns=fullflexible,
+    keepspaces=true,
+    frame=none
+}
 
 \usepackage[backend=bibtex,style=numeric,sorting=nyt]{biblatex}
 \addbibresource{references.bib}
@@ -35,132 +48,931 @@
 \newcommand{\norm}[1]{\left \lVert #1 \right \rVert}
 \newcommand{\Ltwo}[2]{\left\lVert #1 \right\rVert_{L^2(#2)}}
 \newcommand{\enorm}[1]{\left\lvert\!\left\lvert\!\left\lvert #1 \right\rvert\!\right\rvert\!\right\rvert}
-\newcommand{\CR}{\mathrm{CR}^1_0(\Omega)}
+\newcommand{\pwenorm}[1]{\left\lvert\!\left\lvert\!\left\lvert #1 \right\rvert\!\right\rvert\!\right\rvert_{\mathrm{pw}}}
+\newcommand{\apw}[2]{a_{\mathrm{pw}}\!\left(#1,#2\right)}
+\newcommand{\CR}{\mathrm{CR}^1_0(\mathcal{T})}
+\newcommand{\matrixdim}[2]{\texttt{#1} $\times$ \texttt{#2}}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
 \newtheorem{definition}{Definition}
+\newtheorem{corollary}{Corollary}
 
 
 \begin{document}
-
-\maketitle
-
+\begin{titlepage}
+    \centering
+    \vspace*{3cm}
+    
+    {\LARGE\textbf{Solving the Poisson problem for singular data with Crouzeix-Raviart FEM}\par}
+    
+    \vspace{1.2cm}
+    
+    {\large Projektpraktikum 2\par}
+    
+    \vspace{1.5cm}
+    
+    {\large Nathan Arnaud\par}
+    
+    \vfill
+    
+    {\large \today\par}
+\end{titlepage}
+\setcounter{tocdepth}{2}
 \tableofcontents
-
 \newpage
-
+\setcounter{section}{-1}
+\section{Motivation}
+\label{sec: motivation}
+Partial differential equations of elliptic type arise naturally in a wide range of applications, including heat conduction, electrostatics, structural mechanics and fluid flow \cite[pp. 3-7]{Evans2000}. In many realistic scenarios, the acting forces are not smoothly distributed but highly localized. Typical examples include point sources or line loads in mechanical models. Such phenomena cannot be adequately described within classical solution frameworks that require high regularity of both the data and the solution. It is therfore necessary to consider weaker formulations and adequate adaptations for the numerical solvers. For this, the Poisson equation serves as a prototypical model problem for understanding elliptic boundary value problems. It is a doorway into solving other, more complex PDEs for singular data such as the Stokes or the Maxwell equations.
 \section{Introduction}
-\label{sec:introduction}
-Given an open, polygonal bounded lipschitz domain \(\Omega \subseteq \mathbb{R}^2\) and \(f \in L^2(\Omega) \) we consider the classical formulation of the poisson model problem: 
-\[ -\Delta u = f \quad \text{and} \quad u = 0 \text{ on} \partial \Omega \]
-From this we derive the weak formulation 
-\[- a(u,v) = F(v) \text{for all} v \in H^1_0(\Omega) \quad \text{and} \quad u = 0 \text{ on} \partial \Omega\]
-seeking \(u \in H^1(\Omega)\) where \(F(v) := \int_\Omega fv \dx\) is a functional in \(H^{-1}(\Omega) \) and the energy scalar product \(a\) is defined as \(a(u,v) := \int_\Omega \nabla u \cdot \nabla v \dx \). This setting enlarges the space of possible solutions \(u\) but it also enlarges the space of possible right hand sides \(f\). In particular it allows the treatment of singular data such as line or point loads, first of which will be examined in this report. To solve the discrete problem with non-conforming finite elements one faces the additional task, of mapping the non-conforming test-functions into \(H^1_0(\Omega)\). This is done with a smoother \(J\) that will be discussed in the following chapter. With this the discrete problem seeks \(\uCR \in \mathrm{CR}^1_0 (\mathcal{T})\) such that: 
-\[
-    \int_\Omega \nabla_\mathrm{pw} \uCR  \nabla_\mathrm{pw} \vCR \dx = \int_\Omega f \space J\vCR \dx
-\]
-holds for all \(\vCR \in \mathrm{CR}^1_0(\mathcal{T})\). 
+\label{sec: introduction}
+\subsection{Preliminaries}
+\label{subsec: preliminaries}
+\paragraph{FEM notation} The Finite Elements notations as used in \cite{CPDEscript} applies. In particular, the set of admissible triangulations is denoted as \(\mathbb{T}\), with admissible triangulations \(\mathcal{T}\), edges \(\mathcal{E}\), vertices \(\mathcal{N}\) and interior edges and vertices \(\mathcal{E}(\Omega), \mathcal{N}(\Omega)\). Furthermore, the barycentric coordinates \(\lambda_P\) for a vertex \(P \in \mathcal{N}(T)\) and the space of lowest-order non-conforming Finite Elements \(\CR\) with the basis functions \(\psi_E\) for an edge \(E \in \mathcal{E}\) are assumed to be known to the reader. Also, the definition of a regular triangulation and the notion of shape-regularity are assumed to be known.
+\paragraph{Functional Analysis notation}
+Throughout this report, the standard notation on Lebesgue and Sobolev spaces applies as in \cite{Evans2000}. Additionally, for a domain \(\Omega \subset \mathbb{R}^2\) and \(u,v \in H^1_0(\Omega)\) the scalar product \(a(u,v) := \int_\Omega \nabla u \cdot \nabla v \dx \) is associated with the energy norm \(\enorm{\cdot} = \sqrt{a(\cdot,\cdot)}\) and its piecewise analogon in the non-conforming space is \(a_\mathrm{pw}(\uCR,\vCR) := \sum_{T \in \mathcal{T}} \int_T \nabla \uCR \cdot \nabla \vCR \dx \) with the piecewise energy norm \(\enorm{\cdot}_\mathrm{pw}\) in \(\CR\). For \(w \in H^1_0(\Omega) + \CR\) and \(T \in \mathcal{T}\) we define \(\enorm{w}_T := \int_T (\nabla w)^2 \dx \) and similarly for an edge \(E \in \mathcal{E}\) we write \(\enorm{w}_E := \int_E (\nabla w)^2 \dx\). 
+\paragraph{AFEM Software notation} We will refer to the standard matrices and functions implemented in the AFEM package \cite{AFEMinterfaceDocu}. In particular we will use \(\texttt{n4e,c4n,s4e,s4n,n4s}\) as well as \(\texttt{solveCRPoisson, estimateCRetaSides}\) and assume that the reader is familiar with these matrices and functions.
+\paragraph{Further notation} The signs \(\approx\) and  \(\lesssim\) will be used to denote that for a constant \(C\) that is independent of the triangulation \(\mathcal{T} \in \mathbb{T}(\mathcal{T}_0)\) it holds that \(a \approx b \iff a = Cb\) and \(a \lesssim b \iff a \le C b\). 
+\paragraph{Interpolation operator \(I\) and smoother \(J\)}
+For a polygonal bounded Lipschitz domain \(\Omega \subset \mathbb{R}^2\) and a regular triangulation \(\mathcal{T}\) the interpolation operator \(I : H^1_0(\Omega) + \CR \rightarrow \CR\) is defined such that \(Iv\) is the bestapproximation of \(v\) in \(\mathrm{CR}^1_0(\mathcal{T})\) with respect to the scalar product \(a_{\mathrm{pw}}\). In particular, \(v - Iv \perp \mathrm{CR}^1_0(\mathcal{T})\) with respect to \(a_{\mathrm{pw}}\) for  \(v \in H^1_0(\Omega) + \CR\) and \(\vCR = I\vCR\) for \(\vCR \in \CR\). The explicit definition of \(I\) is given in \cite[p. 61]{Puttkammer2023}. Moreover, the smoother \(J: \mathrm{CR}^1_0(\mathcal{T}) \rightarrow P_4(\mathcal{T})\) is defined in three steps below
+\begin{align}
+J_1 : \CR &\rightarrow S^1_0(\mathcal{T}), \quad
+\vCR \mapsto \sum_{z \in \mathcal{N}(\Omega)} \left( |\mathcal{T}(z)|^{-1} \sum_{T \in \mathcal{T}(z)} {\vCR|_T(z)} \right) \psi_z, \label{definition J1} \\
+J_2: \CR &\rightarrow S^2_0(\mathcal{T}), \quad \vCR \mapsto J_1 \vCR + \sum_{E \in \mathcal{E}(\Omega)} \left(\fint_{E} \left( \vCR - J_{1} \vCR \right) \ds \right) b_E, \label{definition J2}\\
+J_3: \CR &\rightarrow S^4_0(\mathcal{T}), \quad \vCR \mapsto J_2 \vCR
++ \sum_{T \in \mathcal{T}} \sum_{P \in \mathcal{N}(T)}
+\left(\int_T \bigl( \vCR - J_2 \vCR \bigr)\, \Phi_{T,P} \dx \right) \Phi_{T,P} b_T, \label{definition J3}
+\end{align}
+where \(b_E\) is defined as \(b_E := 6 \prod_{P \in \mathcal{N}(E)} \lambda_P\) for an edge \(E \in \mathcal{E}\) and, for a triangle \(T \in \mathcal{T}\) and vertex \(P \in \mathcal{N}\) we  define \(\Phi_{T,P} := |T|^{-1/2} (\alpha - \beta \lambda_P)\) for the constants \(\alpha := \sqrt{\frac{20}{27}} (\sqrt{7}+1)\) and \(\beta := \sqrt{\frac{140}{3}}\). Lastly, we define \(b_T := 27\prod_{P \in \mathcal{N}(T)} \lambda_P\). We abbreviate \(J = J_3\) and refer to \(J\) as the smoother.
 
-In a more general context, the examination of this problem also functions as a doorway into solving other, more complex PDEs for singular data. Furthermore it explores the limitations of the finite element method in the sense that singular points may not be suitably refined towards. 
+\subsection{Problem definition}
+\label{sec:introduction}
+Given a polygonal bounded Lipschitz domain \(\Omega \subset \mathbb{R}^2\) and \(f \in C^0(\Omega) \) we consider the classical formulation of the poisson model problem, seeking \(u \in C^2(\Omega)\) that satisfies 
+\[ -\Delta u = f \quad \text{and} \quad u = 0 \text{ on } \partial \Omega. \]
+From this we derive the weak formulation which seeks \(u \in H^1(\Omega)\), such that for all \(v \in H^1_0(\Omega)\)
+\begin{equation} \label{weak formulation PMP}
+\int_\Omega \nabla u \cdot \nabla v \dx  = F(v) \quad \text{holds, and} \quad u = 0 \text{ on } \partial \Omega
+\end{equation}
+
+for a given \(F \in H^{-1}(\Omega)\). This setting enlarges the space of possible solutions as welll the space of possible right-hand sides. In particular it allows the treatment of singular data such as lineloads, which will be examined in this report. When solving the weak formulation \eqref{weak formulation PMP} with non-conforming finite elements, one faces the additional task of mapping the non-conforming test-functions into \(H^1_0(\Omega)\). This is done with the smoother \(J: \CR \rightarrow H^1_0(\Omega)\) that is introduced in \ref{subsec: preliminaries}. With this, the discrete problem seeks \(\uCR \in \mathrm{CR}^1_0 (\mathcal{T})\) such that
+\begin{equation} \label{discrete equation PMP}
+\int_\Omega \nabla_\mathrm{pw} \uCR  \nabla_\mathrm{pw} \vCR \dx = F(J\vCR) \quad \text{for all } \vCR \in \CR.
+\end{equation}
+    
+\subsection{Goals}
+\label{goals}
+Our goals in this project are the following:
+\begin{enumerate}
+    \item Implementing an efficient computation of the smoother \(J\).
+    \item Examining solutions \(\uCR\) in \eqref{discrete equation PMP} for different lineloads.
+    \item Analyzing the convergence rates for uniform mesh refinement on \(\Omega=(-1,1)^2\).
+\end{enumerate}
 \section{Theory}
 \label{sec:theorie}
-\subsection{general setup}
-Throughout this report, the setup and notation will be the following. Given an open, polygonal bounded, lipschitz domain \(\Omega\) we consider a *write here the properties that map should have* map \(\gamma : \mathbb{R} \rightarrow \mathbb{R}^2\) and the right hand side in the Poisson problem \(F(v) := \int_\gamma \ell v \ds\) for \(\ell, v \in L^2(\gamma)\). Furthermore, the quasiinterpolant \(I : H^1_0(\Omega) \rightarrow \mathrm{CR}^1_0\) such that \(Iv\) is the bestapproximation of \(v\) in \(\mathrm{CR}^1_0(\Omega)\), so in particular: \(v - Iv \perp \mathrm{CR}^1_0(\Omega)\). 
-Also, as metioned in the introduction, a smootheer \(J: \mathrm{CR}^1_0(\Omega) \rightarrow P_4(\mathcal{T})\) with the property \(IJ = \mathrm{id}\) on \(\mathrm{CR}^1_0(\Omega)\) will be used. 
-\subsection{error estimator}
-For a solution \(\uCR \in \CR\) we define the error estimator \(\eta: \mathcal{T} \rightarrow (0,\infty)\) as
-\[\eta^2(T) := |\gamma(T)| \norm{\ell}^2_{L^2(\gamma(T))} + |T|^{1/2} \sum_{E \in \mathcal{E}(T) \cap \mathcal{E}(\Omega)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)} \]
-where \(\gamma(T) := \mathrm{im}(\gamma) \cap T\) *what if \(\gamma\) is on an edge? then it is counted twice*
-\begin{theorem}\label{theorem: estimator bounds error}
-For the solution \(u\) and the discrete solution \(\uCR\) on a triangulation \(\mathcal{T}\), it holds:
-\[\enorm{u - \uCR} \le \eta(\mathcal{T})\]
+\subsection{General setup}
+\label{general setup}
+Let $\Omega \subset \mathbb{R}^2$ be a bounded polygonal Lipschitz domain.  
+We consider the line \[
+\gamma := \operatorname{im}(\Gamma) = \Gamma((0,1)) \subset \Omega,
+\]
+where
+\(\Gamma : (0,1) \to \Omega\) is a Lipschitz parametrization of a straight line segment in $\mathbb{R}^2$. In particular, there exist distinct points $x_0, x_1 \in \Omega$ such that
+\(\Gamma(t) = (1-t)x_0 + t x_1\) for \(t \in (0,1).\) Furthermore, we assume that in the initial triangulation \(\mathcal{T}_0\), the line \(\gamma\) is covered exactly by edges \(E \in \mathcal{E}_0\). This means, that there exist edges \(E_1, ...,E_K \in \mathcal{E}\) such that \(\gamma = \cup_{k=1}^K E_k\). We denote this set of edges with \(\mathcal{E}(\gamma)\).
+Lastly, given a lineload \(\ell \in L^2(\gamma)\) we will consider the right-hand side \(F(\vCR) := \int_\gamma \ell J\vCR \dx\). This yields the discrete equation
+\begin{equation} \label{discrete equation with lineload}
+\int_\Omega \nabla_\mathrm{pw} \uCR  \nabla_\mathrm{pw} \vCR \dx = \int_\gamma \ell \space J\vCR \dx \quad \text{for all } \vCR \in \CR
+\end{equation}
+that we will work on in this report.
+\subsection{Error estimator}
+For a regular triangulation \(\mathcal{T}\) and  \(\vCR \in \CR\) we define the error estimator \(\eta: \mathbb{T} \rightarrow [0,\infty)\) as \(\eta(\mathcal{T)} := \sqrt{\sum_{T \in \mathcal{T}} \eta^2(T)}\) where the contribution on each triangle \(T \in \mathcal{T}\) is defined by
+\begin{equation} \label{definition estimator}
+\eta^2(T) := |\gamma \cap T| \norm{\ell}^2_{L^2(\gamma \cap T)} + |T|^{1/2} \sum_{E \in \mathcal{E}(T)} \norm{[\partial \vCR/\partial s]_E}^2_{L^2(E)}.
+\end{equation}
+\begin{lemma}
+\label{lemma: properties of I and J}
+For the interpolation operator \(I\) and the smoother \(J\) as defined the section~\ref{subsec: preliminaries}, the properties
+\begin{align}
+IJ &= \mathrm{id} \quad \text{on } \mathrm{CR}^1_0(\mathcal{T}), \label{IJ is identity}\\
+\apw{\vCR}{v} &= \apw{\vCR}{Iv} \quad \text{for } v \in H^1_0(\Omega) + \CR. \label{apw only sees Iv}
+\end{align}
+hold. 
+\end{lemma}
+\begin{proof}
+Equation~\eqref{IJ is identity} is proven in \cite[pp. 62-68]{Puttkammer2023}. Equation \eqref{apw only sees Iv} follows from the observation, that in
+\begin{align*}
+\apw{\vCR}{v} = \apw{\vCR}{v-Iv} + \apw{\vCR}{Iv}
+\end{align*}
+the first term vanishes due to the orthogonality \(v - Iv \perp \mathrm{CR}^1_0(\mathcal{T})\) with respect to the energy scalar product \(a_{\mathrm{pw}}\) for \(v \in H^1_0(\Omega) + \CR\).
+\end{proof}
+\begin{corollary}
+\label{corollary: JvCR = vCR for apw}
+Given a regular triangulation \(\mathcal{T}\) and \(\vCR \in \CR\) it holds, that
+\begin{equation*}
+    \apw{\vCR}{J\vCR - \vCR} = 0. 
+\end{equation*}
+\end{corollary}
+\begin{proof}
+Using the linearity and the property \eqref{apw only sees Iv} of the interpolation operator \(I\) given in in Lemma~\ref{lemma: properties of I and J} yields
+\begin{equation*}
+\apw{\vCR}{J\vCR-\vCR} = \apw{\vCR}{IJ\vCR - I\vCR}.
+\end{equation*}
+Since \(I\) maps onto the bestapproximation in \(\CR\), it is the identity on \(\CR\). This and \eqref{IJ is identity} from Lemma~\ref{lemma: properties of I and J} imply that \(IJ\vCR - I\vCR = \vCR - \vCR = 0\) which proves the claim. 
+\end{proof}
+\begin{lemma} \label{lemma: fundamental inequalities for I and J}
+For \(\vCR \in \CR\) and \(v \in H^1_0(\Omega)\) the following fundamental inequalities for the interpolation operator \(I\) and the smoother \(J\) hold.
+\begin{align}
+\enorm{v-Iv}_T &\le \enorm{v - \vCR}_T,   \label{bestapprox property of Iv} \\
+\Ltwo{h_\mathcal{T}^{-1} (v-Iv)}{\Omega} &\lesssim \pwenorm{v-Iv} \label{v-Iv L2 bound} \\
+\Ltwo{h_\mathcal{T}^{-1} (\vCR - J\vCR)}{\Omega}^2 &\le \min_{v \in H^1_0(\Omega)} \pwenorm{\vCR - v}^2 \label{vCR-JvCR min property in L2} \\
+\pwenorm{\vCR - J\vCR}^2 \lesssim \sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)}&\norm{[\partial \vCR/\partial s]_E}^2_{L^2(E)} \le \min_{v \in H^1_0(\Omega)} \pwenorm{\vCR - v}^2 \label{vCR-JvCR min property in energynorm}
+\end{align}
+\end{lemma}
+\begin{proof}
+Equation~\eqref{bestapprox property of Iv} is a direct result of the bestapproximation property of \(I\). Theorem 3.24 (b) in \cite[p.61]{Puttkammer2023} gives \(\Ltwo{v-Iv}{T} \lesssim h_T \enorm{v-Iv}_T\). Squaring the inequality and taking the sum over all triangles \(T \in \mathcal{T}\) proves \eqref{v-Iv L2 bound}. Inequalities \eqref{vCR-JvCR min property in L2} and \eqref{vCR-JvCR min property in energynorm} are the squared, 2D versions of Theorem 3.25 (b) in \cite[p.62]{Puttkammer2023}.
+\end{proof}
+\begin{lemma}
+\label{lemma: inequalities for I and J}
+For a triangle \(T \in \mathcal{T}\) and functions \(v \in H^1_0(\Omega)\), \(\vCR \in \CR\) the following inequalities hold.
+\begin{align}
+\pwenorm{v - JIv} &\lesssim \pwenorm{v - Iv}, \label{v-JIv enormbound} \\
+\Ltwo{h_{\mathcal{T}}^{-1}(v - JIv)}{\Omega} &\lesssim \enorm{v - Iv}_T, \label{v-JIv L2bound}
+\end{align}
+\end{lemma}
+\begin{proof}
+ Since \(Iv \in \CR\) we can use \eqref{vCR-JvCR min property in energynorm} from Lemma~\ref{lemma: fundamental inequalities for I and J} to infer, that 
+ \begin{equation*}
+\pwenorm{Iv - JIv} \lesssim \min_{w \in H^1_0(\Omega)} \pwenorm{Iv - w} \le \pwenorm{Iv - v}.
+ \end{equation*} Therefore, we can prove \eqref{v-JIv enormbound} with 
+ \begin{equation*}
+\pwenorm{v-JIv} \le \pwenorm{v-Iv} + \pwenorm{Iv-JIv} \lesssim \pwenorm{v-Iv}
+ \end{equation*}
+ To prove \eqref{v-JIv L2bound} we use a similar strategy. We write
+ \begin{equation*}
+     \Ltwo{h_\mathcal{T}^{-1} (v-JIv)}{\Omega} \le \Ltwo{h_\mathcal{T}^{-1} (v-Iv)}{\Omega} + \Ltwo{h_\mathcal{T}^{-1}(Iv - JIv)}{\Omega}
+ \end{equation*}
+ Using \eqref{v-Iv L2 bound} we can bound the first term \(\Ltwo{h_\mathcal{T}^{-1} (v-Iv)}{\Omega} \lesssim \pwenorm{v-Iv}\). For the second term we can use \eqref{vCR-JvCR min property in energynorm} from Lemma~\ref{lemma: fundamental inequalities for I and J} to infer, that 
+ \begin{equation*}
+\Ltwo{h_\mathcal{T}^{-1}(Iv - JIv)}{\Omega} \lesssim \min_{w \in H^1_0(\Omega)} \pwenorm{Iv - w} \le \pwenorm{Iv - v}.
+\end{equation*}
+Putting the two terms together, we obtain the inequality \(\Ltwo{h_\mathcal{T}^{-1} (v-JIv)}{\Omega} \lesssim \pwenorm{v-Iv}\), as claimed.
+\end{proof}
+\begin{lemma}[Trace inequality]
+\label{lemma: trace inequality}
+For an edge \(E\) of a triangle \(T\) in a regular triangulation \(\mathcal{T}\) the inequality
+\begin{equation}\label{trace inequality}
+\Ltwo{v}{E}^2 \lesssim h_T^{-1} \Ltwo{v}{T}^2 + h_T \enorm{v}_T^2
+\end{equation}
+holds for all \(v \in H^1_0(\Omega)\)
+\end{lemma}
+\begin{proof}
+\cite[p.23-24]{Puttkammer2023} proves, that for all \(v \in H^1_0(\Omega)\)
+\begin{equation*}
+\Ltwo{v}{E}^2 \le \frac{|E|}{|T|} \Ltwo{v}{T} \left( \Ltwo{v}{T} + h_T \Ltwo{\nabla v}{T} \right).
+\end{equation*}
+Using the shape regularity of \(\mathcal{T}\) we can rewrite it to 
+\begin{equation*}
+\Ltwo{v}{E}^2 \lesssim h_T^{-1} \Ltwo{v}{T}^2 + \Ltwo{v}{T}\enorm{v}_T.
+\end{equation*}
+Using Youngs inequality \(ab \le \frac{1}{2\epsilon} a^2 + \frac{\epsilon}{2}b^2\) for \(\epsilon=h_T\) the second therm can be bounded by 
+\begin{equation*}
+    \Ltwo{v}{T} \enorm{v}_T \lesssim h_T^{-1} \Ltwo{v}{T}^2 + h_T \enorm{v}_T^2.
+\end{equation*}
+and therefore \(\Ltwo{v}{E}^2 \lesssim h_T^{-1} \Ltwo{v}{T}^2 + h_T \enorm{v}_T^2 \) as claimed. 
+\end{proof}
+
+
+\begin{theorem}[reliability]\label{theorem: estimator bounds error}
+The solution \(u\) in \eqref{weak formulation PMP} and the discrete solution \(\uCR\) in \eqref{discrete equation PMP} on a regular triangulation \(\mathcal{T}\) satisfy
+\[\pwenorm{u - \uCR} \lesssim \eta(\mathcal{T}).\]
 \end{theorem}
 \begin{proof}
-For a triangle \(T \in \mathcal{T}\) and the functions \(v \in H^1_0(\Omega)\), \(\vCR \in \CR\) the following inequalities hold and will be used in the proof:
-\begin{align}
-\Ltwo{v - JIv}{T} &\lesssim h_T \enorm{v - Iv}_T \\ \label{v-JIv L2bound}
-\enorm{v - JIv}_T &\lesssim \enorm{v - Iv}_T \\ \label{v-JIv enormbound}
-\enorm{v-Iv}_T &\le \enorm{v - \vCR}_T \\
-\enorm{\vCR - J\vCR}^2_\Omega &\lesssim \sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)}\norm{[\partial \vCR/\partial s]_E}^2_{L^2(E)}  \label{smoother estimate}
-\end{align}
-
-Also the generalized trace inequality in the form: 
-\begin{align}
-\Ltwo{v}{\gamma(T)}^2 \lesssim \frac{|\gamma(T)|}{h_T^2} \Ltwo{v}{T}^2 + |\gamma(T)| \enorm{v}^2_T
-\label{generalized trace inequality}
-\end{align}
-
 We start with the decompostion 
-\begin{align*}
-\enorm{u-\uCR}^2_\Omega &= a(u-\uCR, u - \uCR) \\
-&= a(u,u-J\uCR) + a(u, J\uCR - \uCR) - a(\uCR, u-\uCR)
-\end{align*}
-Using Cauchy-Schwarz and \eqref{smoother estimate}, the second term gives 
-\begin{equation}
-\begin{aligned}
-a(u,J\uCR -\uCR) &= a(u-\uCR,J\uCR -\uCR) \\
-&\le \enorm{u-\uCR}_\Omega \enorm{\uCR - J\uCR}_\Omega \\
-&\lesssim \enorm{u-\uCR}_\Omega \sqrt{\sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T) \cap \mathcal{E}(\Omega)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)}}
-\end{aligned}
-\label{second term}
-\end{equation}
+\begin{align}
+\pwenorm{u-\uCR}^2 &= \apw{u-\uCR}{u - \uCR} \notag \\
+&= a(u,u-J\uCR) + \apw{u}{J\uCR-\uCR} - \apw{\uCR}{u-\uCR} \label{decomposition of error}.
+\end{align}
+For the second term, first using Corollary~\ref{corollary: JvCR = vCR for apw} and then applying the inequality \eqref{vCR-JvCR min property in energynorm} from Lemma \ref{lemma: fundamental inequalities for I and J} gives
+\begin{align} \label{second term}
+\apw{u}{J\uCR -\uCR} &= \apw{u - \uCR}{J\uCR - \uCR} \notag\\
+&\le \pwenorm{u-\uCR} \pwenorm{\uCR - J\uCR} \notag \\
+&\lesssim \pwenorm{u-\uCR} \sqrt{\sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)}}
+\end{align}
 
-The difference of the first and the third term can be bounded as follows: 
-\begin{equation}
-\begin{aligned}
-a(u,u-J\uCR) - a(\uCR,u-\uCR) &= a(u,u-J\uCR) - a(\uCR, Iu-\uCR)\\
-&= \int_\gamma \ell (u-J\uCR) \ds - \int_\gamma \ell J(Iu-\uCR) \ds \\
-&= \int_\gamma \ell (u-JIu) \ds \\
-&\le \Ltwo{h_\gamma^{1/2} \ell}{\gamma} \Ltwo{h_\gamma^{-1/2}(u-JIu)}{\gamma} \\
-\end{aligned}
+Using the second property in Lemma~\ref{lemma: properties of I and J} and the fact that, since \(I\) maps to the bestapproximation in \(\CR\), \(I=\mathrm{id}\) on \(\CR\), the difference of the first and the third term can be bounded as follows: 
+\begin{align}
 \label{first and thrid term}
-\end{equation}
-Using the generalized trace inequality \eqref{generalized trace inequality} and \eqref{v-JIv L2bound}, \eqref{v-JIv enormbound} on the second factor gives: 
+a(u,u-J\uCR) - a(\uCR,u-\uCR) &= a(u,u-J\uCR) - a(\uCR, Iu-\uCR) \notag\\
+&= \int_\gamma \ell (u-J\uCR) \ds - \int_\gamma \ell J(Iu-\uCR) \ds \notag \\
+&= \int_\gamma \ell (u-JIu) \ds \notag \\
+&\le \Ltwo{h_\gamma^{1/2} \ell}{\gamma} \Ltwo{h_\gamma^{-1/2}(u-JIu)}{\gamma},
+\end{align}
+
+where \(h_\gamma\) is piecewise linear along \(\gamma\) and defined as \(h_\gamma|_E := |E|\) for \(E \in \mathcal{E}\). Using the trace inequality as stated in Lemma~\ref{lemma: trace inequality} the second factor reveals: 
+\begin{align*}
+\Ltwo{h_\gamma^{-1/2}(u-JIu)}{\gamma} &= \left(\sum_{E \in \mathcal{E}(\gamma)} |E|^{-1} \Ltwo{u-JIu}{E}^2 \right)^{1/2} \\
+&\lesssim \left(\sum_{T \in \mathcal{T}} h_T^{-1}\left(h_T^{-1} \Ltwo{u-JIu}{T}^2 + h_T \enorm{u-JIu}_T^2 \right) \right)^{1/2} \\
+&= \left(\Ltwo{h_\mathcal{T}^{-1} (u-JIu)}{\Omega}^2 +\enorm{u-JIu}^2 \right)^{1/2}
+\end{align*}
+The inequalities from Lemma~\ref{lemma: inequalities for I and J} and the bestapproximation property of \(I\) stated in \eqref{bestapprox property of Iv} enable the further simplification to 
 \begin{equation}
-\begin{aligned}
-\Ltwo{h_\gamma^{-1/2}(u-JIu)}{\gamma} &= \left(\sum_{T \in \mathcal{T}(\gamma)} |\gamma(T)|^{-1} \Ltwo{u-JIu}{\gamma(T)}^2 \right)^{1/2} \\
-&\lesssim \left( \sum_{T \in \mathcal{T}} \frac{1}{h_T^2} \Ltwo{u-JIu}{T}^2 + \enorm{u-JIu}^2_T \right)^{1/2} \\
-&\lesssim \left(\sum_{T \in \mathcal{T}(\gamma)} \enorm{u-Iu}^2_T \right)^{1/2} \\
-&= \enorm{u-Iu}_{\mathcal{T}(\gamma)} \\
-&\le \enorm{u-\uCR}_{\Omega}
-\end{aligned}
-\label{bound on u-JIu}
+\Ltwo{h_\gamma^{-1/2}(u-JIu)}{\gamma} \lesssim \pwenorm{u-Iu} \le \pwenorm{u-\uCR} \label{equation: bound on u-JIu} 
 \end{equation}
-Combining \eqref{second term}, \eqref{first and thrid term}, \eqref{bound on u-JIu} and dividing by \(\enorm{u-\uCR}_\Omega\) concludes the proof. 
+Inserting \eqref{second term}, \eqref{first and thrid term}, \eqref{equation: bound on u-JIu} into the decompostion in \eqref{decomposition of error} and dividing by \(\pwenorm{u-\uCR} \neq 0\) provides the inequality
+\begin{align}
+    \pwenorm{u-\uCR} &\lesssim \sqrt{\sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)}} + \Ltwo{h_\gamma^{1/2} \ell}{\gamma} \notag\\
+    &\lesssim \sqrt{\sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)} + \Ltwo{h_\gamma^{1/2} \ell}{\gamma}^2} \notag\\
+    &= \sqrt{\sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)} + \sum_{E \in \mathcal{E}(\gamma)} |E| \Ltwo{\ell}{E}^2} \notag\\
+    &\lesssim \sqrt{\sum_{T \in \mathcal{T}}|T|^{1/2} \sum_{E \in \mathcal{E}(T)} \norm{[\partial \uCR/\partial s]_E}^2_{L^2(E)} + \sum_{T \in \mathcal{T}} |\gamma \cap T| \Ltwo{\ell}{\gamma \cap T}^2} \notag\\
+    &= \eta(\mathcal{T}) \notag
+\end{align}
+where Youngs inequality \(a+b \le \sqrt{2(a^2 + b^2)}\) is used in the second step and the next to last inequality follows from \(  \sum_{E \in \mathcal{E}(\gamma)} |E| \Ltwo{\ell}{E}^2 \le \frac{1}{2} \sum_{T \in \mathcal{T}} |\gamma \cap \mathcal{T}| \Ltwo{\ell}{\gamma \cap T}^2\) because every edge-length on \(\gamma\) is counted at most twice in the sum over all triangles. 
 
 
 \end{proof}
 
-\subsection{Smoother}
-The smoother \(J: \CR \rightarrow S^4_0(\mathcal{T})\) is defined in three steps: 
-\begin{definition}
-Given a triangulation \(\mathcal{T}\) on \(\Omega\) we define: 
+\subsubsection{Expected convergence rates}
+\label{subsubsec: expected convergence rates}
+To analyze the expected convergence rates of the error estimator we consider the lineterm and the jumpterm seperately 
+\begin{align*}
+\eta_{\text{line}}^2 &:=  \sum_{T \in \mathcal{T}} |\gamma \cap T| \Ltwo{\ell}{\gamma \cap T}^2 \\
+\eta_{\text{jump}}^2 &:= \sum_{T \in \mathcal{T}} |T|^{1/2} \sum_{E \in \mathcal{E}(T) \cap \mathcal{E}(\Omega)} \norm{[\partial \vCR/\partial s]_E}^2_{L^2(E)}.
+\end{align*}
+Given that the line \(\gamma\) is mapped exactly by the set of edges \(\mathcal{E}(\gamma)\) and assuming that all edges \(E \in \mathcal{E}(\gamma)\) are of the same length, we can write 
+\begin{align}
+\eta_{\text{line}}^2 &:=  \sum_{T \in \mathcal{T}} |\gamma \cap T| \Ltwo{\ell}{\gamma \cap T}^2 \notag\\
+&= \sum_{E \in \mathcal{E}(\gamma)} |E| \Ltwo{\ell}{E}^2 \notag\\
+&= |E| \Ltwo{\ell}{\gamma}^2. \label{estimator lineterm}
+\end{align}
+Writing \(\texttt{ndof} := |\mathcal{E}(\Omega)|\) for the number of degrees of freedom, \eqref{estimator lineterm}  scales like \(\texttt{ndof}^{-1/2}\) under uniform red-refinement because for a given level \(\ell \in \mathbb{N}\)
+\[4^{\mathrm{\ell}} \approx |\mathcal{T}| = \frac{2}{3}( |\mathcal{E}(\Omega)| - |\mathcal{E}(\partial \Omega|) \approx |\mathcal{E}(\Omega)| = \texttt{ndof}\]
+and therefore \(|E| \approx \frac{1}{2^{\ell}} \approx \texttt{ndof}^{-1/2}\). Here the sign \(\approx\) and the wording ``\(X\) scales like \(Y\)" means that \(\frac{X}{Y} \rightarrow c\) for \(\ell \rightarrow \infty\) and a constant \(c \in \mathbb{R}\).
+The jumpterm \(\eta_{\text{jump}}^2\) will not be analytically studied in this report. Instead, we refer to the known convergence rates of the jumpterm in CRFEM for the standard Poisson problem, where the jumpterm is defined identically. There, for the squared jumpterm and uniform refinement, a convergence rate of \(s=-1\) for convex domains and \(s=-2/3\) for non-convex domains can be observed with respect to the number of degrees of freedom. 
+
+Combining the expected convergence rates for the squared lineterm \(\eta_\text{line}^2\) and the squared jumpterm \(\eta_\text{jump}^2\) gives an expected convergence rate of \(s=-1/4\) for the non-squared error estimator \(\eta = \sqrt{\eta_\text{line}^2 + \eta_\text{jump}^2}\).
+\section{MATLAB Implementation}
+\label{sec:implementation}
+\subsection{Implementing the smoother} \label{implementing the smoother}
+The smoother \(J\) is built in three steps, as shown in the definitions \eqref{definition J1}, \eqref{definition J2} and \eqref{definition J3}. For each of the functionals \(J_1, J_2, J_3\) , since the functions \(\psi_z, b_E, \Phi_{T,P} \text{ and } b_T\) that are used for in definition of the smoother are independent of the input \(\vCR \in \CR\), the coefficients
+\begin{align}
+    j_1(z) &:= |\mathcal{T}(z)|^{-1} \sum_{T \in \mathcal{T}(z)} {\vCR|_T(z)} \quad \text{for } z \in \mathcal{N}(\Omega) \label{definition j1 coefficient},\\
+    j_2(E) &:= \fint_{E} \left( v_{CR} - J_{1} v_{CR} \right) \ds \quad \text{for } E \in \mathcal{E} \label{definition j2 coefficient}, \\
+    j_3(T,P) &:= \int_T \bigl( \vCR - J_2 \vCR \bigr)\, \Phi_{T,P} \dx \label{definition j3 coefficients} \quad \text{for } T \in \mathcal{T} \text{ and } P \in \mathcal{N}(T),
+\end{align}
+uniquely determine the result of \(J_k \vCR\) for a given \(\vCR\) and \(k=1,2,3\).
+\paragraph{\(J_1\) operator.}
+For each vertex \(z \in \mathcal{N}(\Omega)\) we want to compute
+\(j_1\) as defined in \eqref{definition j1 coefficient}. For this, we start by building a matrix \(\texttt{Z} \in \mathbb{R}^{|\mathcal{T}| \times 3}\) such that for a vertex \(z = \texttt{n4e(i,j)}\) in the triangle \(T_i \in \mathcal{T}\)
+\[
+\texttt{Z(i,j)} = \vCR|_T(z).
+\]
+To compute the values of \(\vCR|_T\) at the vertex \(z\) we use the formula derived in \cite[p.157]{GNUMOscript} to extrapolate the values at the edge midpoints and write \texttt{Z = sum(vCR(s4e),2)*ones(1,3)- 2*vCR(s4e)} using the reordered matrix \(\texttt{s4e}\) where for the edge \(E_k\) that lies opposite of \(z\), \(\texttt{s4e(i,j) = k}\).
+
+For the next step, we use the boolean matrix \(\texttt{pos4n}\ \in \mathbb{R}^{|\mathcal{N}| \times 3|\mathcal{T}|}\) that is defined via linear indexing of \(\texttt{n4e}\) as 
+\[
+\texttt{pos4n(i,j)} := \begin{cases}
+    1 \quad \text{if } \texttt{n4e(j) = i}, \\
+    0 \quad \text{else}.
+\end{cases}
+\]
+With \(\texttt{nr\_nodes} = |\mathcal{N}|\) and \(\texttt{nr\_positions} = 3|\mathcal{T}|\) this matrix can be pre-computed with
+
+\begin{lstlisting}
+node_idx = n4e(:);
+pos_idx = (1:nr_positions)';
+pos4n = sparse(node_idx,pos_idx,1,nr_nodes,nr_positions);
+\end{lstlisting}
+
+Together the coefficients for \(J_1\) are computed swiftly with
+\[
+\texttt{
+j1 = (pos4n*Z(:))./counts\_per\_node 
+}
+\]
+where \(\texttt{counts\_per\_node = sum(pos4n, 2)} \in \mathbb{R}^{|\mathcal{N}|}\) counts the number of triangles in which each vertex occurs. 
+
+\paragraph{\(J_2\) operator.}
+For the \(J_2\) operator the additional degrees of freedom are on the edges, where we need to compute \(j_2\) as defined in \eqref{definition j2 coefficient}. Since \(\vCR\) and \(J_1\vCR\) are piecewise linear objects, we can use the midpoint quadrature rule to obtain
+\begin{equation} \label{j2 coefficients}
+\fint_{E} \left( v_{CR} - J_{1} v_{CR} \right) \ds = \vCR(\text{mid}(E)) - \frac{J_1 \vCR(P_1) + J_1 \vCR(P_2)}{2}
+\end{equation}
+
+for the two vertices \(P_1, P_2 \in \mathcal{N}(E)\). Therefore, the coefficients can be computed in one line of code with 
+\[
+\texttt{j2 = vCR-sum(j1(n4s),2)/2}
+\]
+
+\paragraph{\(J_3\) operator.}
+Here we are looking to compute \(j_3 = \int_T \bigl( \vCR - J_2 \vCR \bigr)\, \Phi_{T,P} \dx\) for each triangle \(T \in \mathcal{T}\) and vertex \(P \in \mathcal{N}(T)\). Since each of the three functions \(\vCR, J_2 \vCR, \Phi_{T,P}\) can be expressed in terms of barycentric coordinates we find a polynomial \(\Lambda =\Lambda(\lambda_1, \lambda_3, \lambda_3)\) of degree 3 that satifies
 \begin{equation}
+\label{equation j3 operator}
+\int_T \bigl( \vCR - J_2 \vCR \bigr)\, \Phi_{T,P} \dx = \int_T \Lambda \dx.
+\end{equation}
+The concrete derivation of \(\Lambda\) can be found in the Appendix~\ref{calculations J3}. In the implementation, the formula \eqref{formula for j3 coefficient} is used in a vectorized form and returns \(\texttt{j3}\) as a \(|\mathcal{T}| \times 3\) matrix. Further details can be found in the interface documentation (Appendix~\ref{software}).
+
+
+\subsection{Implementing the solver}
+Having successfully implemented the smoother, we can now implement a solver of the discrete problem \eqref{discrete equation with lineload}. This means, finding \(\uCR \in \CR\) such that
+\begin{equation}
+\int_\Omega \nabla_\mathrm{pw} \uCR  \nabla_\mathrm{pw} \psi_i \dx = \int_\gamma \ell \space J\psi_i \dx \quad \text{for } i=1,...,|\mathcal{E}(\Omega)|
+\end{equation}
+
+for the CR basis functions \(\psi_i\), a given line \(\gamma\) and a lineload \(\ell \in L^2(\gamma)\). Following the typical FEM strategy, the solver iterates over finer and finer triangulations \(\mathcal{T}_0,...,\mathcal{T}_m\) and solves the discrete problem on each of them. Its first input to our solver \(\texttt{CRPoisson\_lineload}\) is \(\texttt{geometry}\) which gives the name of the geometry \(\Omega\). This maps to a list of predefined geometries in the AFEM package and gives an initial triangulation \(\texttt{c4n,n4e,n4sDb}\). It is necessary, that the line \(\gamma\) is covered by edges of the initial triangulation. The second input is \(\texttt{nodes\_line}\) and it describes the line \(\gamma\). It is a vector that contains the number of the vertices of the initial triangulation that lie on \(\gamma\) (following the enumeration in \(\texttt{c4n}\)). Thirdly, the input \(\texttt{lineload}\) defines the function \(\ell\) in \eqref{discrete equation with lineload} and is passed as a function handle. The last two inputs are \(\texttt{max\_level}\) and \(\texttt{degree}\) which give maximum level of refinement \(m\) and the polynomial degree of the lineload \(\ell\). This is used to choose an appopriate quadrature rule for the integration. For lineloads that are not polynomials or polynomials of very high degree (see section~\ref{sec:experiments}) the choice of this parameter is a trade-off between speed and accuracy.
+\paragraph{Solve.}
+After the initialization of the mesh, the degrees of freedom and the other necessary helpers \(\texttt{nr\_sides,s4e,pos4n,counts\_per\_node, n4s}\) and \(\texttt{n4s\_line}\) we start the loop over the levels. In each loop the first step is to solve \eqref{discrete equation with lineload}. For this, the right-hand side \(\texttt{b}\) is built in a for-loop over the degrees of freedom, which are  the inner sides \(E \in \mathcal{E}(\Omega)\). 
+\begin{lstlisting}
+for i = dofs'
+ psi = zeros(nr_sides,1);
+ psi(i) = 1;
+ j1 = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,psi);
+ j2 = computeJ2vCR(n4s,psi,j1);
+ b(i) = computeRHS(c4n,sides_line,n4s_line,j1,j2,lineload,degree+2);
+end
+\end{lstlisting}
+Here, the helpers \(\texttt{s4e,pos4n,counts\_per\_node}\) from Paragraph 1 in Subsection~\ref{implementing the smoother} are used. Additionally, \(\texttt{sides\_line}\) is a vector that contains the numbers of the edges \(E \in \mathcal{E}(\gamma)\) where the enumeration refers to the order in \(\texttt{n4s}\) and \(\texttt{n4s\_line}\) is simply \(\texttt{n4s(sides\_line,:)}\). Lastly, to understand that only the coefficients \(\texttt{j1,j2}\) are needed to compute the integral for the right-hand side, recall the definition of the \(J_3\) operator \eqref{definition J3}. Per definition the volume-bubble factor \(b_T\) vanishes on the edges of the triangle \(T\) and since \(\gamma\) is covered exactly by edges in the triangulation \(\mathcal{T}\), the coefficients \(j_3(T,P)\) as defined in \eqref{definition j3 coefficients} do not contribute to the integral \(\int_\gamma J\vCR\).
+For further details on the function \(\texttt{computeRHS}\), refer to the interface documentation in Appendix~\ref{software}. Now that the right-hand side \(\texttt{b}\) is computed, we solve \eqref{discrete equation with lineload} with the call
+\[
+\texttt{[uCR,ndof4lvl(level)] = solveCRPoisson\_lineload(b,c4n,n4e,n4sDb);}
+\]
+
+\paragraph{Estimate.}
+Recall the estimator defined in \eqref{definition estimator} for any triangle \(T \in \mathcal{T}\) by
+\[
+\eta^2(T) := |\gamma \cap T| \norm{\ell}^2_{L^2(\gamma \cap T)} + |T|^{1/2} \sum_{E \in \mathcal{E}(T)} \norm{[\partial \vCR/\partial s]_E}^2_{L^2(E)}.
+\]
+The lineterm and the jumpterm are computed seperately for each triangle with
+\begin{lstlisting}
+eta4s_jumpterm = estimateCREtaSides(uCR,c4n,n4e,n4sDb);
+eta4s_lineterm = estimate_lineterm(c4n,n4s_line,length4s_line,lineload,degree);
+\end{lstlisting}
+where \(\texttt{length4s\_line}\) is a vector that contains the length of each side \(E \in \mathcal{E}(\gamma)\) ordered as in \(\texttt{n4s\_line}\).
+The estimator \(\eta(\mathcal{T})\) is the square root of the sums
+\[\texttt{error4lvl(level) = sqrt(sum(eta4s\_jumpterm)+sum(eta4s\_lineterm))}.\]
+
+\paragraph{Refine.}
+Lastly the triangulation is uniformly red-refined, which means that every triangle is divided into four congruent subtriangles by connecting the three edge's midpoints. The matrix \(\texttt{n4s\_line}\) is also passed as an input and updated in the refine routine. The final call in the for-loop over the levels is
+\begin{lstlisting}
+[c4n,n4e,n4sDb,n4s_line] = refineUniformRed_with_line(c4n,n4e,n4s,n4sDb,n4s_line).
+\end{lstlisting}
+\section{Numerical experiments}
+\label{sec:experiments}
+For the experiments, we choose the domain \(\Omega = (-1,1)^2\), the line \(\gamma = (0,1) \times \{0\}\) and we examine the three lineloads \(\ell_1(x) = 1, \ell_2(x) = 1-2x, \ell_3(x) = e^{-x}\). The initial triangulation for all experiments is shown in Figure~\ref{fig:initial_triangulation}. 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{photos/initial_triangulation.png}
+    \caption{Initial triangulation \(\mathcal{T}_0\) with \(\gamma\) marked in red}
+    \label{fig:initial_triangulation}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.48\textwidth]{photos/1_solutionPlot.png}
+    \hfill
+    \includegraphics[width=0.48\textwidth]{photos/1_solutionPlot_back.png}
+    \caption{discrete solution \(\uCR\) for the lineload \(\ell_1(x)=1\) from the front and the back}
+    \label{fig:1 solution plots}
+\end{figure}
+For the first experiment with $\ell_1(x)=1$, the discrete solution $\uCR$ exhibits a pronounced chicken-comb-like ridge along the line $\gamma$, attaining a maximum value of approximately $\uCR(0.4,0)\approx 0.25$. Away from $\gamma$ the solution decays smoothly towards zero at the boundary $\partial\Omega$. As seen from the reverse perspective, the discrete solution $\uCR$ is symmetric with respect to the $x$-axis, i.e., $\uCR(x,y) = \uCR(x,-y)$, while it does not exhibit any symmetry of the form $\uCR(x,y+c) = \uCR(-x,y+c)$ for a \(c \in \mathbb{R}\).
+The convergence history plot with the full estimator \(\eta\) as well as the jumpterm \(\eta_{\text{jump}}\) is shown in Figure~\ref{fig:1_convergence history plot}. One observes a decrease in the error, from the order of \(1\) down to around \(0.1\) over the six refinements, last of which reaches around \(10^5\) degrees of freedom. Also the two errors \(\eta\) and \(\eta_{\text{jump}}\) stay mostly parallel throughout, while from \(10^3\) degrees of freedom onwords \(\eta_{\text{jump}}\) decreases with a slightly higher rate than \(\eta\). Their slopes are bounded from above by \(-1/4\) and from below by \(-1/3\). 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{photos/1_convergencePlot.png}
+    \caption{Convergence history plot for the lineload \(\ell_1(x)=1\)}
+    \label{fig:1_convergence history plot}
+\end{figure}
+
+Consider \(\ell_2(x) = 1-2x\). The discrete solution is shown in Figure~\ref{fig:1-2x solution plots} and, similarly to Figure~\ref{fig:1 solution plots}, displays a pronounced ridge along the line \(\gamma\). The first one, closer to the origin and taller, is maximal at around \(\uCR(0.1,0)=0.1\) whereas the second one, closer to the boundary is negative and minimal at around \(\uCR(0.85,0) = -0.05\). Again, away from the line $\gamma$, the discrete solution $\uCR$ rapidly decays to zero. 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.48\textwidth]{photos/1-2x_solutionPlot.png}
+    \hfill
+    \includegraphics[width=0.48\textwidth]{photos/1-2x_solutionPlot_back.png}
+    \caption{discrete solution \(\uCR\) for the lineload \(\ell_2(x)=1-2x\) from the front and the back}
+    \label{fig:1-2x solution plots}
+\end{figure}
+The convergence history plot with \(\eta\) and \(\eta_{\text{jump}}\) is shown in Figure~\ref{fig:1-2x_convergence history plot}. After an initial increase of $\eta$ and $\eta_{\mathrm{jump}}$ from the first to the second refinement step, both error estimators exhibit a linear decay in the double logarithmic plot and remain of comparable magnitude. As in the first example, one observes a slightly faster convergence of the jumpterm \(\eta_{\text{jump}}\). Again both are bounded from above with slope \(-1/4\) and from below by slope with\(-1/3\). The final error at around \(10^5\) degrees of freedom is of order \(0.1\). 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{photos/1-2x_convergencePlot.png}
+    \caption{Convergence history plot for the lineload \(\ell_2(x)=1-2x\)}
+    \label{fig:1-2x_convergence history plot}
+\end{figure}
+
+Consider \(\ell_3(x) = e^{-x}\). The discrete solution to \eqref{discrete equation with lineload}, depicted in Figure~\ref{fig:exp(-x) solution plots}, exhibits a wave-like ridge that is strongly localized along the line $\gamma$. Starting from the origin, the solution increases in an approximately exponential manner and attains its maximum value of about $\uCR(0.3,0)\approx 0.2$, before decaying towards zero at the boundary $\partial\Omega$. Qualitatively, the solution resembles that of the first experiment shown in Figure~\ref{fig:1 solution plots}; however, the location of the peak is shifted closer to the origin along the $x$-axis and is more spatially localized. Moreover, the decay towards zero occurs earlier along the $x$-direction compared to the first example.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.48\textwidth]{photos/exp(-x)_solutionPlot.png}
+    \hfill
+    \includegraphics[width=0.48\textwidth]{photos/exp(-x)_solutionPlot_back.png}
+    \caption{discrete solution \(\uCR\) for the lineload \(\ell_3(x)=e^{-x}\) from the front and the back}
+    \label{fig:exp(-x) solution plots}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{photos/exp(-x)_convergencePlot.png}
+    \caption{Convergence history plot for the lineload \(\ell_3(x)=e^{-x}\)}
+    \label{fig:exp(-x)_convergence history plot}
+\end{figure}
+The convergence history plot for the lineload \(\ell(x) = e^{-x}\) in Figure~(\ref{fig:exp(-x)_convergence history plot}) is very similar to the convergence history plot for \(\ell(x) = 1\). The three principal observations are:
+\begin{itemize}
+    \item The error estimators $\eta$ and $\eta_{\mathrm{jump}}$ are of comparable magnitude throughout the refinement process.
+    \item A slightly faster convergence rate of $\eta_{\mathrm{jump}}$ becomes apparent at higher refinement levels, in particular as the number of degrees of freedom approaches $10^5$.
+    \item Both estimators are bounded from above by a rate corresponding to a slope of $-1/4$ and from below by a rate corresponding to a slope of $-1/3$ in the double logarithmic plot.
+\end{itemize}
+ 
+
+\section{Interpretation}
+
+\subsection{Interpretation of the solution plots}
+
+For all three line loads, the pronounced sharpness of the ridge reflects the singular nature of the right-hand side concentrated along the line $\gamma$. It is expected that, upon further mesh refinement, this feature becomes increasingly pronounced, as the singular behavior along $\gamma$ is resolved more accurately by the discrete solution.
+
+For both $\ell_1(x)$ and $\ell_2(x)$, the observed lack of symmetry of $\uCR$ with respect to reflections across vertical lines (i.e., $ \nexists c \in \mathbb{R}$ such that $\uCR(x,y+c) = \uCR(-x,y+c)$ for all $x \in (-1,1)$) is not consistent with the symmetry of the corresponding line loads. In the absence of Dirichlet boundary conditions, one would naturally expect the solution to inherit this symmetry. In the first example, the maximum is attained at $x \approx 0.4$ rather than at $x=0.5$, while in the second example the extrema occur at $x \approx 0.1$ and $x \approx 0.85$, rather than symmetrically around $x=0.5$. 
+
+This shift can be attributed to the distribution of degrees of freedom of $\uCR$: in the interior, and in particular near the origin, the discrete space allows for greater flexibility than near the boundary, where Dirichlet conditions are imposed. Consequently, the solution exhibits a shift of its extrema towards the interior, where it can attain larger positive values.
+
+Furthermore, for $\ell_2(x)$ and $\ell_3(x)$, the qualitative shape of the solution reflects the behavior of the respective line loads. In the second example, the opposite signs of the two extrema correspond to the sign change in the line load, and their locations are close to the points where the load attains its maximum and minimum values. A similar effect is observed in the third example: compared to $\ell_1(x)$, the solution decays more rapidly towards the boundary and attains a smaller maximum value (approximately $0.2$ instead of $0.25$), reflecting the rapid decay of $\ell_3(x)=e^{-x}$ for $x>0$.
+
+\subsection{Interpretation of the convergence history plots}
+
+Recall the discussion of the expected convergence rates from Subsection~\ref{subsubsec: expected convergence rates}, in particular the predictions $s(\eta)=-1/4$ and $s(\eta_{\mathrm{jump}})\approx -1/2$. 
+
+For the estimator $\eta$, the observed convergence rates across all three experiments are slightly better than $-1/4$. Taking into account the limited number of data points, these observations are consistent with the theoretical expectations.
+
+In contrast, the jump contribution $\eta_{\mathrm{jump}}$ does not exhibit the anticipated convergence rate of $-1/2$, but rather appears to approach a rate of approximately $-1/3$. This behavior is reminiscent of the convergence rates observed for CRFEM on the L-shaped domain, where a singularity is present at the re-entrant corner. This suggests that the singularity along $\gamma$ has a significant impact on the convergence behavior, leading to a reduction of the rate. The precise extent of this effect cannot be conclusively determined without additional computations on finer meshes.
+
+\section{Conclusion and outlook}
+\subsection{Conclusion}
+Revisiting the goals set in Subsection~\ref{goals}, we draw the following key conclusions: 
+\begin{enumerate}
+    \item We successfully implemented a smoother \(J\) in section~\ref{sec:implementation} and ensured its efficient and scalable computation with the use of the sparse matrix \(\texttt{pos4n}\)
+    \item We studied the shapes of the solutions \(\uCR\) for three different lineloads \(\ell\) and could see the singularity along \(\gamma\) as a sharp crest. 
+    \item We successfully computed and visualized the convergence rates for up to $10^5$ degrees of freedom and subsequently compared with the corresponding theoretical predictions.
+\end{enumerate}
+\subsection{Outlook}
+It seems that there are a plethora of further investigations to be made on this topic. Here is an excerpt of ideas, in reference to the three set goals.
+\begin{enumerate}
+    \item Implementing an efficient smoother \(J\) in MATLAB.
+    \begin{itemize}
+        \item Improve efficiency by building the right-hand side \(\texttt{b}\) as a loop over the degrees of freedom \(i\) where \(\mathrm{supp}(J\psi_i) \cap \gamma \neq \emptyset\) instead of a loop over all.
+        \item Improve efficiency by parallelizing the computation of the right-hand side \(\texttt{b}\) over the degrees of freedom. 
+        \item Improve efficiency by computing the coefficients of \(J\) only at the degrees of freedom in \(\mathrm{supp}(J\psi_i)\).
+    \end{itemize}
+    \item Examine solutions \(\uCR\) for different lineloads.
+    \begin{itemize}
+        \item Examine solutions for lineloads that are 0 at the beginning and end points of \(\gamma\) to see solutions where the singularities are less ``sharp''
+        \item Create ``side-cut'' plots where only the \(x\)- and \(z\)-axis is shown, such that the slope and maxima are more visible. I.e plots along \(\gamma\) and \(-\gamma\).
+    \end{itemize}
+    \item Analyzing the convergence rates.
+    \begin{itemize}
+        \item Refine the triangulation adaptively to improve the convergence rates.
+        \item Plot the errors for up to \(10^6\) or more degrees of freedom to see how convergence rates evolve.
+        \item Plot the convergence rates of other error measures (e.g \(\enorm{u_{\text{aitken}}-\uCR}\), \(\enorm{J\uCR - \uCR}\)) to verify the reliability of the estimator \(\eta\).
+    \end{itemize}
+\end{enumerate}
+And of course further experiments on different domains and for different lines should be done. 
+\newpage
+\appendix
+\section{Calculations for the smoother}
+\label{calculations J3}
+The goal is to compute the local contributions for \(J_3\) determined by \(\int_T (v_{\mathrm{CR}} - J_2 v_{\mathrm{CR}})\,\Phi_{T,P}\) for a given triangle \(T \in \mathcal{T}\) and \(P \in \mathcal{N}(T)\).
+First, recall the definitons 
+\begin{align*}
+    J_2 v_{\mathrm{CR}} &:= J_1 v_{\mathrm{CR}} + \sum_{E \in \mathcal{E}(\Omega)}
+     \int_E (v_{\mathrm{CR}} - J_1 v_{\mathrm{CR}})\, b_E \\
+    b_E &:= 6 \prod_{P \in \mathcal{N}(E)} \lambda_P \\
+    \Phi_{T,P} &:= \frac{1}{\sqrt{|T|}}(\alpha - \beta \lambda_P)
+\end{align*}
+from the definitions~\eqref{definition J1}, \eqref{definition J2}, \eqref{definition J3}. Write \((x_1,x_2,x_3)\) for the values of \(\vCR\) at the edge midpoints \(E(\mathrm{mid})\) for \(E \in \mathcal{E}(T)\) and \((a_1,a_2,a_3)\) for the coefficients \(j_1(z)\) for \(z \in \mathcal{N}(T)\) as well as \((b_1,b_2,b_3)\) \(j_2(E)\) for \(E \in \mathcal{E}(T)\).
+The Crouzeix–Raviart function on \(T\) reads
+\begin{align*}
+v_{\mathrm{CR}}
+&= x_1 \psi_1|_T + x_2 \psi_2|_T + x_3 \psi_3|_T \\
+&= x_1(1 - 2\lambda_1)
+  + x_2(1 - 2\lambda_2)
+  + x_3(1 - 2\lambda_3) \\
+&= \underbrace{(x_1 + x_2 + x_3)}_{=: x_{\mathrm{sum}}}
+   - 2(x_1\lambda_1 + x_2\lambda_2 + x_3\lambda_3).
+\end{align*}
+
+and \(J_2\) can be expressed in barycentric coordinates as 
+\begin{align*}
+J_2 v_{\mathrm{CR}}
+&= J_1 v_{\mathrm{CR}}
+   + \sum_{E \in \mathcal{E}(\Omega)}
+     \int_E (v_{\mathrm{CR}} - J_1 v_{\mathrm{CR}})\, b_F \\
+&= a_1\lambda_1 + a_2\lambda_2 + a_3\lambda_3
+   + 6\bigl(
+      b_1 \lambda_2\lambda_3
+    + b_2 \lambda_1\lambda_3
+    + b_3 \lambda_1\lambda_2
+     \bigr).
+\end{align*}
+ We identify the vertex \(P\) with a local number \(p \in \{1,2,3,\}\) and give the edge \(E\) that lies opposite to \(P\) that same number. The product with \(\Phi_{T,P}\) then gives 
+\begin{align*}
+v_{\mathrm{CR}}\Phi_{T,P}
+&= \frac{1}{\sqrt{|T|}}
+\Bigl[
+x_{\mathrm{sum}}\alpha
+- x_{\mathrm{sum}}\beta \lambda_p
+- 2\alpha(x_1\lambda_1 + x_2\lambda_2 + x_3\lambda_3) \\
+&\qquad
++ 2\beta(x_1\lambda_1\lambda_p
+        + x_2\lambda_2\lambda_p
+        + x_3\lambda_3\lambda_p)
+\Bigr]
+\end{align*}
+and 
+\begin{align*}
+J_2 v_{\mathrm{CR}}\Phi_{T,P}
+&= \frac{1}{\sqrt{|T|}}
+\Bigl[
+\alpha (a_1\lambda_1 + a_2\lambda_2 + a_3\lambda_3) \\
+&\quad
++ 6\alpha (b_1\lambda_2\lambda_3
+          + b_2\lambda_1\lambda_3
+          + b_3\lambda_1\lambda_2) \\
+&\quad
+- \beta(a_1\lambda_1\lambda_p
+        + a_2\lambda_2\lambda_p
+        + a_3\lambda_3\lambda_p) \\
+&\quad
+- 6\beta(b_1\lambda_2\lambda_3\lambda_p
+         + b_2\lambda_1\lambda_3\lambda_p
+         + b_3\lambda_1\lambda_2\lambda_p)
+\Bigr].
+\end{align*}
+
+The barycentric integration formula reads 
+\[
+\int_T \lambda_1^\alpha \lambda_2^\beta \lambda_3^\gamma
+=
+2|T|
+\frac{\alpha!\,\beta!\,\gamma!}
+{(2+\alpha+\beta+\gamma)!}.
+\]
+for $\alpha,\beta,\gamma \in \mathbb{N}$ gives in particular
+\begin{align*}
+\int_T \lambda_i \dx &= \frac{1}{3}|T|, \\
+\int_T \lambda_i\lambda_j \dx
+&=
+\begin{cases}
+\frac{1}{12}|T|, & i\neq j,\\[4pt]
+\frac{1}{6}|T|, & i=j,
+\end{cases}
+\\[6pt]
+\int_T \lambda_i\lambda_j\lambda_k \dx
+&=
+\begin{cases}
+\frac{1}{60}|T|, & i,j,k \text{ distinct},\\[4pt]
+\frac{1}{30}|T|, & i\neq j = k,\\[4pt]
+\frac{1}{10}|T|, & i=j=k.
+\end{cases}
+\end{align*}
+
+Collecting all contributions yields
+\begin{align*}
+\int_T (v_{\mathrm{CR}} - J_2 v_{\mathrm{CR}})\,\Phi_{T,P} \dx
+&=
+\sqrt{|T|}
+\Bigg[
+\frac{1}{3}\bigl(x_{\mathrm{sum}}(\alpha-\beta)
+                 - \alpha a_{\mathrm{sum}}\bigr) \\
+&\quad
++ \frac{1}{12}
+\bigl(\beta(2x_{\mathrm{other}} + a_{\mathrm{other}})
+      - 6\alpha b_{\mathrm{sum}}\bigr) \\
+&\quad
++ \frac{1}{6}\beta(2x_p + a_p)
++ \frac{1}{10}\beta b_p
++ \frac{1}{5}\beta b_{\mathrm{other}}
+\Bigg].
+\end{align*}
+where the subscripts sum and other are used. The subscript \(\mathrm{sum}\) implies \(y_\mathrm{sum} := y_1 + y_2 + y_3\) for \(y=x,a,b,c\). The subscirpt \(\mathrm{other}\) means \(y_\mathrm{other} := y_{p+1} + y_{p+2}\) using cyclic notation.
+A final simplification leads to 
+
+\begin{equation}
+\label{formula for j3 coefficient}
 \begin{aligned}
-J_1 : \CR &\rightarrow S^1_0(\mathcal{T}), \quad
-\vCR \mapsto \sum_{z \in \mathcal{N}(\Omega)} \left( |\mathcal{T}(z)|^{-1} \sum_{T \in \mathcal{T}(z)} {\vCR|_T(z)} \right) \psi_z \\
-J_2: \CR &\rightarrow S^2_0(\mathcal{T}), \quad \vCR \mapsto J_1 \vCR + \sum_{E \in \mathcal{E}(\Omega)} \left(\fint_{E} \left( v_{CR} - J_{1} v_{CR} \right) \ds \right) b_E\\
-J_3: \CR &\rightarrow S^4_0(\mathcal{T}), \quad \vCR \mapsto J_2 \vCR
-+ \sum_{T \in \mathcal{T}} \sum_{P \in \mathcal{N}(T)}
-\left(\int_T \bigl( \vCR - J_2 \vCR \bigr)\, \Phi_{T,P} \dx \right) \Phi_{T,P} b_T
+\sqrt{|T|}
+\Bigg\{
+&\alpha\left[\frac{1}{3}\left(x_{\mathrm{sum}}-a_{\mathrm{sum}}\right)-\frac{1}{2}b_{\mathrm{sum}}\right] \\
+&+\beta\left[\frac{1}{6}x_{\mathrm{other}}-\frac{1}{3}x_{\mathrm{sum}}+\frac{1}{12}a_{\mathrm{other}}+\frac{1}{5}b_{\mathrm{other}}+\frac{1}{3}x_{p}+\frac{1}{6}a_{p}+\frac{1}{10}b_{p}\right]
+\Bigg\}.
 \end{aligned}
 \end{equation}
-where \(\psi_z\) is the nodal basis function and \(b_E := 6 \prod_{P \in \mathcal{N}(E)} \lambda_P\). Also \(\Phi_{T,P} := |T|^{-1/2} (\alpha - \beta \lambda_P)\) for the constants \(\alpha := \sqrt{\frac{20}{27}} (\sqrt{7}+1)\) and \(\beta := \sqrt{\frac{140}{3}}\) and lastly \(b_T := 27\prod_{P \in \mathcal{N}(T)} \lambda_P\).
-\end{definition}
-With this definition \(J := J_3\) satisfies the properties used in the proof of \autoref{theorem: estimator bounds error}. \cite{Puttkammer2023}
-\section{MATLAB Documentation}
-\label{sec:fehler}
 
-\section{Numerische Experimente und Auswertung}
-\label{sec:experimente}
+\section{Interface Documentation}
 
-\section{Experiments and results}
-\label{sec:implementation}
-\section{Interpretation}
-\section{Conclusion}
-\section{Appendix}
+\subsection{computePos4n}
 
-\printbibliography
+\paragraph{Signature}
+\begin{verbatim}
+[pos4n,counts_per_node] = computePos4n(n4e,nr_nodes)
+\end{verbatim}
 
+\paragraph{Description}
+Constructs the boolean matrix \texttt{pos4n} and the vector 
+\texttt{counts\_per\_node}. 
+The entry $\texttt{pos4n}(i,j)=1$ if $\texttt{n4e}(j)=i$ and $0$ otherwise. 
+The vector $\texttt{counts\_per\_node}(i)$ counts how often node $i$ occurs in 
+\texttt{n4e}.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{n4e} : $\texttt{nr\_elems} \times 3$ matrix (from \texttt{loadGeometry})
+    \item \texttt{nr\_nodes} : integer, equal to $\texttt{size(c4n,1)}$
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{pos4n} : $\texttt{nr\_nodes} \times 3*\texttt{nr\_nodes}$ 
+          boolean matrix
+    \item \texttt{counts\_per\_node} : vector of length \texttt{nr\_nodes}
+\end{itemize}
+
+\subsection{computeJ1vCR}
+
+\paragraph{Signature}
+\begin{verbatim}
+[j1] = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR)
+\end{verbatim}
+
+\paragraph{Description}
+Computes the coefficients of the $J_1$ operator applied to a 
+Crouzeix--Raviart function. The operator averages nodal values from neighboring triangles as described in \eqref{definition j1 coefficient} and returns 
+a vector of length $\texttt{nr\_nodes}$.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{s4e} : $\texttt{nr\_elems} \times 3$ matrix from \texttt{computeS4e}
+    \item \texttt{pos4n} : $\texttt{nr\_nodes} \times 3\texttt{nr\_nodes}$ 
+          boolean matrix from \texttt{computePos4n}
+    \item \texttt{n4sDb} : $\texttt{nr\_DirichletNodes} \times 2$ matrix 
+          containing the two nodes for each boundary edge
+    \item \texttt{counts\_per\_node} : vector of length \texttt{nr\_nodes} from \texttt{computePos4n}
+    \item \texttt{vCR} : vector of length \texttt{nr\_sides} containing the 
+          Crouzeix--Raviart coefficients
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{j1} : vector of length \texttt{nr\_nodes} containing the 
+          coefficients of the $J_1$ operator
+\end{itemize}
+
+
+\subsection{computeJ2vCR}
+
+\paragraph{Signature}
+\begin{verbatim}
+[j2] = computeJ2vCR(n4s,vCR,j1)
+\end{verbatim}
+
+\paragraph{Description}
+Computes the coefficients $j_2$ of the $J_2$ operator applied to a 
+Crouzeix--Raviart function.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{n4s} : $\texttt{nr\_sides} \times 2$ matrix from \texttt{computeN4s}
+    \item \texttt{vCR} : vector of length \texttt{nr\_sides} containing 
+          Crouzeix--Raviart coefficients
+    \item \texttt{j1} : \(\texttt{nr\_nodes} \times \texttt{1}\) vector from \(\texttt{computeJ1vCR}\)
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{j2} : vector of length \texttt{nr\_sides} containing the 
+          edge degrees of freedom of $J_2 \vCR$
+\end{itemize}
+
+
+\subsection{computeJ3vCR}
+
+\paragraph{Signature}
+\begin{verbatim}
+[j3] = computeJ3vCR(n4e,s4e,area4e,vCR,j1,j2)
+\end{verbatim}
+
+\paragraph{Description}
+Applies the $J_3$ operator to a given Crouzeix--Raviart function.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{n4e} : $\texttt{nr\_elems} \times 3$ matrix from \texttt{loadGeometry}
+    \item \texttt{s4e} : \(\texttt{nr\_elems} \times \texttt{3}\) from \texttt{computeS4e}
+    \item \texttt{area4e} : \texttt{nr\_elems} \(\times\) \texttt{1} vector from \texttt{computeArea4e}
+    \item \texttt{vCR} : vector of length \texttt{nr\_sides} containing Crouzeix--Raviart coefficients
+    \item \texttt{j1} : vector of length \texttt{nr\_nodes} from \texttt{computeJ1vCR}
+    \item \texttt{j2} : vector of length \texttt{nr\_sides} from \texttt{computeJ2vCR}
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{j3} : $\texttt{nr\_elems} \times 3$ matrix containing the 
+          coefficients of $J_3 v_{CR}$ for the three nodes of each triangle
+\end{itemize}
+
+
+\subsection{CRPoisson\_lineload}
+
+\paragraph{Signature}
+\begin{verbatim}
+CRPoisson_lineload(geometry,nodes_line,max_level,lineload,degree)
+\end{verbatim}
+
+\paragraph{Description}
+Solves the Poisson model problem with a line load on the right-hand side 
+using the smoother $J$. The function also plots the convergence rates.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{geometry} : string specifying the geometry (from AFEM geometries)
+    \item \texttt{nodes\_line} : \texttt{nr\_nodesOnLine} \(\times\) \texttt{1} vector containing the nodes on the line
+    \item \texttt{max\_level} : integer specifying the maximum refinement level
+    \item \texttt{lineload} : function handle defining the line load
+    \item \texttt{degree} : integer specifying the desired quadrature degree
+\end{itemize}
+
+\paragraph{Output}
+None.
+
+
+\subsection{integrateJ3vCR\_lineload}
+
+\paragraph{Signature}
+\begin{verbatim}
+[integral_value] = integrateJ3vCR_lineload(c4n,n4s_line,sides_line,
+                                                j1,j2,lineload,degree)
+\end{verbatim}
+
+\paragraph{Description}
+Computes the exact line integral \(\int_\gamma \ell J_3 \vCR \dx \) of $J_3 v_{CR}$ weighted by a lineload \(\ell \in L^2(\gamma)\).
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{c4n} : \texttt{nr\_nodes} \(\times\) \texttt{3} matrix from \texttt{loadGeometry}
+    \item \texttt{n4s\_line} : \texttt{nr\_sidesOnLine} \(\times\) \texttt{2} matrix with node pairs describing the sides on the line
+    \item \texttt{sides\_line} : \matrixdim{nr\_sidesOnLine}{1} vector with indices of sides lying on the line
+    \item \texttt{j1} : \matrixdim{nr\_nodes}{1} vector from \texttt{computeJ1vCR}
+    \item \texttt{j2} : \matrixdim{nr\_sides}{1} vector from \texttt{computeJ2vCR}
+    \item \texttt{lineload} : function handle that describes the lineload
+    \item \texttt{degree} : integer that sets desired quadrature degree
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{integral\_value} : integer, value of the line integral
+\end{itemize}
+
+
+\subsection{estimate\_lineterm}
+
+\paragraph{Signature}
+\begin{verbatim}
+lineterm4s = estimate_lineterm(c4n,n4s_line,length4s_line,lineload,degree)
+\end{verbatim}
+
+\paragraph{Description}
+Computes the piecewise line term \(h_E \int_E \ell^2\) for every edge $E \in \mathcal{E}(\gamma)$ on the line.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{c4n} : \matrixdim{nr\_nodes}{3} matrix from \texttt{loadGeometries}
+    \item \texttt{n4s\_line} : \matrixdim{nr\_sidesOnLine}{1} vector with node pairs describing the sides on the line
+    \item \texttt{length4s\_line} : \matrixdim{nr\_sidesOnLine}{1} vector containing the lengths for the edges on the line
+    \item \texttt{lineload} : function handle describing the lineload
+    \item \texttt{degree} : integer specifying the desired quadrature degree
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{lineterm4s} : \matrixdim{nr\_sidesOnLine}{1} vector containing the integral contribution for each side
+\end{itemize}
+
+
+\subsection{refineUniformRed\_with\_line}
+
+\paragraph{Signature}
+\begin{verbatim}
+[c4nNew,n4eNew,n4sDbNew,n4s_lineNew] = 
+                    refineUniformRed_with_line(c4n,n4e,n4s,n4sDb,n4sNb,n4s_line)
+\end{verbatim}
+
+\paragraph{Description}
+Refines every element of the mesh uniformly using red refinement and 
+updates all boundary and line data structures accordingly.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{c4n} : \matrixdim{nr\_nodes}{3} matrix from \texttt{loadGeometries}
+    \item \texttt{n4e} : \matrixdim{nr\_elems}{3} matrix from \texttt{loadGeometries}
+    \item \texttt{n4s} : \matrixdim{nr\_sides}{2} matrix from \texttt{computeN4s}
+    \item \texttt{n4sDb} : \matrixdim{nr\_sidesOnDb}{2} matrix containing the nodes on the Dirichlet boundary sides
+    \item \texttt{n4s\_line} : \matrixdim{nr\_sidesOnLine}{1} vector with node pairs describing the sides on the line
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{c4nNew} : \matrixdim{nr\_nodesNew}{3} matrix describing the positions of each node in the new mesh
+    \item \texttt{n4eNew} : \matrixdim{nr\_elemsNew}{3} matrix describing the nodes that compose each triangle in the new mesh
+    \item \texttt{n4sDbNew} : \matrixdim{nr\_sidesOnDbNew}{2} matrix containing the nodes on the Dirichlet boundary sides in the new mesh
+    \item \texttt{n4s\_lineNew} : \matrixdim{nr\_sidesOnLineNew}{1} vector with node pairs describing the sides on the line in the new mesh
+\end{itemize}
+
+
+\subsection{main}
+
+\paragraph{Signature}
+\begin{verbatim}
+main(max_level)
+\end{verbatim}
+
+\paragraph{Description}
+Runs the numerical experiment described in the project report. 
+The computational domain is the square $(-1,1)^2$ with the line 
+$(0,1) \times \{0\}$. 
+The considered line loads are $1$, $1-2x$, and $\exp(-x)$. In each run of \texttt{main}, the solver routine described in \ref{sec:implementation} is used for the three lineloads. It returns plots of final discrete solutions (on the finest mesh-size) and the convergence history plots for each lineload. The input parameter \texttt{max\_level} sets the maximum refinement level. 
+
+
+\subsection{computeSides\_line}
+
+\paragraph{Signature}
+\begin{verbatim}
+[sides_line] = computeSides_line(n4s,n4s_line)
+\end{verbatim}
+
+\paragraph{Description}
+Determines the indices of sides lying on a specified line described by 
+\texttt{n4s\_line}.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{n4s} : $\texttt{nr\_sides} \times 2$ matrix (from \texttt{computeN4s})
+    \item \texttt{n4s\_line} : \matrixdim{nr\_sidesOnLine}{1} vector with node pairs describing the sides on the line
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{sides\_line} : \matrixdim{nr\_sidesOnLine}{1} vector of side indices lying on the line
+\end{itemize}
+
+
+\subsection{J3vCR\_line}
+
+\paragraph{Signature}
+\begin{verbatim}
+val = J3vCR_line(n4s_line,Gpts4ref,sides_line,j1,j2)
+\end{verbatim}
+
+\paragraph{Description}
+Evaluates $J_3 v_{CR}$ along a line as a function of barycentric coordinates.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{n4s\_line} : \matrixdim{nr\_sidesOnLine}{1} vector with node pairs describing the sides on the line
+    \item \texttt{Gpts4ref} : \matrixdim{nr\_gpts}{2} quadrature points in barycentric coordinates on the reference triangle
+    \item \texttt{sides\_line} : \matrixdim{nr\_sidesOnLine}{1} vector with indices of sides lying on the line
+    \item \texttt{j1} : \matrixdim{nr\_nodes}{1} vector from \texttt{computeJ1vCR}
+    \item \texttt{j2} : \matrixdim{nr\_sides}{1} vector from \texttt{computeJ2vCR}
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{val} : value of $J_3 v_{CR}$ evaluated along the line
+\end{itemize}
+
+\subsection{estimateCREtaSides\_noNeumann}
+
+\paragraph{Signature}
+\begin{verbatim}
+[eta4s,n4s] = estimateCREtaSides_noNeumann(u4Db,x,c4n,n4e,n4sDb)
+\end{verbatim}
+
+\paragraph{Description}
+Implements a residual-based a~posteriori error estimator for the Crouzeix--Raviart (CR) finite element method fora full Dirichlet boundary. 
+
+The estimator approximates the energy error of the CR solution by 
+evaluating the jumps of the tangential derivatives of the discrete 
+solution across element sides.
+
+\paragraph{Input}
+\begin{itemize}
+    \item \texttt{u4Db} : \matrixdim{nr\_sidesOnDb}{1} vector with the Dirichlet boundary condition
+    \item \texttt{x} : \matrixdim{nr\_sides}{1} vector with CR coefficients of the discrete solution (as returned by the solver)
+    \item \texttt{c4n} : \matrixdim{nr\_nodes}{3} matrix from \texttt{loadGeometries}
+    \item \texttt{n4e} : \matrixdim{nr\_elems}{3} matrix from \texttt{loadGeometries}
+    \item \texttt{n4sDb} : \matrixdim{nr\_sidesOnDb}{2} matrix containing the nodes on the Dirichlet boundary sides
+\end{itemize}
+
+\paragraph{Output}
+\begin{itemize}
+    \item \texttt{eta4s} : \matrixdim{nr\_sides}{1} vector containing the local error for each side
+    \item \texttt{n4s} : $\texttt{nr\_sides} \times 2$ matrix (from \texttt{computeN4s})
+\end{itemize}
+\label{software}
+\printbibliography[title={Bibliography}, heading=bibintoc]
 \end{document}
