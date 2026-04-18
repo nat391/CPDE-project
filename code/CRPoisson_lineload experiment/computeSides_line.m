@@ -3,7 +3,7 @@ function [sides_line] = computeSides_line(n4s,n4s_line)
 % n4s_line. 
 % input:  n4s           nr_sides x 3 matrix from computeN4s
 %         n4s_line      nr_sides_on_line x 2 matrix giving the two
-%                           nodes for each side on the line
+%                       nodes for each side on the line
 %
 % output: sides_line   nr_sides_on_line long vector with the side numbers
 %                      for the sides on the line

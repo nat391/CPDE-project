@@ -17,7 +17,7 @@ function [c4nNew,n4eNew,n4sDbNew,n4s_lineNew] = refineUniformRed_with_line(c4n,n
     nrNodes = size(c4n,1);
     nrElems = size(n4e,1);
     nrSides = size(n4s,1);
-    nr_sidesSlit = size(n4s_line,1);
+    nr_side_line = size(n4s_line,1);
     newNodes4s = sparse(n4s(:,1),n4s(:,2),(1:nrSides)'+ nrNodes, ...
                         nrNodes,nrNodes);
     newNodes4s = newNodes4s + newNodes4s';
@@ -58,7 +58,7 @@ function [c4nNew,n4eNew,n4sDbNew,n4s_lineNew] = refineUniformRed_with_line(c4n,n
 
     %% refinement of the line
     
-    n4s_lineNew = zeros(2*nr_sidesSlit,2);
+    n4s_lineNew = zeros(2*nr_side_line,2);
     for curSide = 1 : size(n4s_line,1)
         curNodes = n4s_line(curSide,:);
         curNewNodes = newNodes4s(curNodes(1),curNodes(2));

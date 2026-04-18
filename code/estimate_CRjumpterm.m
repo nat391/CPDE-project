@@ -1,11 +1,10 @@
-function eta4s = estimate_CRjumpterm(u4Db,x,c4n,n4e,n4s,n4sDb)
+function eta4s = estimate_CRjumpterm(u4Db,x,c4n,n4e,n4s,s4e,n4sDb)
 %% estimateCREtaSides - error estimator for CR element
 % Estimate the energy error of the CR finite element solution by the
 % jumps of the discrete solution's tangents along the sides.
 %
-% Input:     g         Neumann boundary condition
-%            u4Db      Dirichlet boundary condition
-%            x         CR basis coefficients of u given by solve
+% Input:     u4Db      Dirichlet boundary condition
+%            x         CR basis coefficients of u
 %            c4n       coordinates for the nodes of the mesh
 %            n4e       nodes for the elements of the mesh
 %            n4s       nr_sides x 2 matrix from computeN4s
@@ -14,7 +13,6 @@ function eta4s = estimate_CRjumpterm(u4Db,x,c4n,n4e,n4s,n4sDb)
 % Output:    eta4s     error for each side
 
     %% Initialisation
-    s4e      = computeS4e(n4e);
     length4s = computeLength4s(c4n,n4s);
     gradU    = zeros(size(n4e,1),2);
     
