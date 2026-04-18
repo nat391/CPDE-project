@@ -29,11 +29,14 @@ sides_line = find( all( ismember(n4s, nodes_line), 2 ) );
 n4s_line = n4s(sides_line,:);
 length4s_line = computeLength4s(c4n,n4s_line);
 
-% get degrees of freedom
-n4s = sort(n4s,2);
+% get sides of the nodepatches around the line nodes
+sides_nodepatch_line = computeSides_nodepatch(nodes_line,pos4n,s4e);
+
+% exclude boundary sides
+n4s_nodepatch_line = sort(n4s(sides_nodepatch_line,:),2);
 n4sDb = sort(n4sDb,2);
-[isMatch, ~] = ismember(n4s,n4sDb,'rows');
-dofs = find(~isMatch);
+[isMatch, ~] = ismember(n4s_nodepatch_line,n4sDb,'rows');
+sides_nodepatch_line = sides_nodepatch_line(~isMatch);
 
 % initialize error4lvl and ndof4lvl
 error4lvl = zeros(max_level,1);
@@ -47,26 +50,29 @@ for level = 1:max_level
 
     % useful constants
     nr_sides = size(n4s,1);
+    nr_sides_nodepatch_line = length(sides_nodepatch_line);
 
     %% solve
 
-    % compute the RHS
-    b = zeros(nr_sides,1);
+    % compute the RHS where non-zero
+    b_local = zeros(nr_sides_nodepatch_line,1);
 
-    for i = dofs'
+    parfor k = 1:nr_sides_nodepatch_line
 
-        %define vCR = psi_j
-        vCR = zeros(nr_sides,1);
-        vCR(i) = 1;
-        
+        side = sides_nodepatch_line(k);
+
         %compute coefficients for J3vCR    
-        j1 = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR);
-        j2 = computeJ2vCR(n4s,vCR,j1);
+        j1 = computeJ1psi(s4e,pos4n,n4sDb,counts_per_node,side);
+        j2 = computeJ2psi(n4s,side,j1);
         
         % intergrate J3vCR over the slit
-        b(i) = integrateJ3vCR_lineload(c4n,n4s_line,sides_line,j1,j2,lineload,degree+2);
+        b_local(k) = integrateJ3vCR_lineload(c4n,n4s_line,sides_line,j1,j2,lineload,degree+2);
     end
     
+    % scatter back to full rhs vector b
+    b = zeros(nr_sides,1);
+    b(sides_nodepatch_line) = b_local;
+  
     [uCR, ndof4lvl(level)] = solveCRPoisson_exactRHS(b,u4Db,c4n,n4e,n4sDb);
 
     %% estimate
@@ -82,15 +88,19 @@ for level = 1:max_level
         n4s = computeN4s(n4e); %optimization idea: compute n4s in refinement step
         s4e = computeS4e(n4e);
         [pos4n,counts_per_node] = computePos4n(n4e,nr_nodes);
+        nodes_line = unique(n4s_line(:)); % not optimal
         sides_line = computeSides_line(n4s,n4s_line);
         length4s_line = computeLength4s(c4n,n4s_line);
         
-
-        % get new degrees of freedom
-        n4s = sort(n4s,2);
+        % get sides of the nodepatches around the line nodes
+        sides_nodepatch_line = computeSides_nodepatch(nodes_line,pos4n,s4e);
+        
+        % exclude boundary sides
+        n4s_nodepatch_line = sort(n4s(sides_nodepatch_line,:),2);
         n4sDb = sort(n4sDb,2);
-        [isMatch, ~] = ismember(n4s,n4sDb,'rows');
-        dofs = find(~isMatch);
+        [isMatch, ~] = ismember(n4s_nodepatch_line,n4sDb,'rows');
+        sides_nodepatch_line = sides_nodepatch_line(~isMatch);
+        
     end
 
 end
@@ -103,11 +113,11 @@ hold on
 
 plotConvergence(ndof4lvl, error4lvl_jumpterm, "\eta_{l,jump}");
 
-scaling1 = error4lvl(1) / (ndof4lvl(1)^(-0.25));
-scaling2 = error4lvl_jumpterm(1) / (ndof4lvl(1)^(-1/3));
+scaling1 = error4lvl(max_level) / (ndof4lvl(max_level)^(-0.25)) * 1.5;
+scaling2 = error4lvl_jumpterm(max_level) / (ndof4lvl(max_level)^(-0.5)) * 1.4;
 
 loglog(ndof4lvl, scaling1 * ndof4lvl.^(-0.25), 'k--', 'DisplayName', 's=-0.25');
-loglog(ndof4lvl, scaling2 * ndof4lvl.^(-1/3), 'k--', 'DisplayName', 's=-1/3');
+loglog(ndof4lvl, scaling2 * ndof4lvl.^(-0.5), 'k--', 'DisplayName', 's=-0.5');
 
 xlabel('ndof')
 legend('show');
@@ -115,13 +125,13 @@ legend('show');
 
 % ---- plot solution ----
 figSol = figure;
-plotCR(c4n,n4e,uCR,'CR-solution');
+plotCR(c4n,n4e,uCR,OPTname);
 
 % ---- save figures ----
-outDir = "images";
-if ~exist(outDir, "dir")
-    mkdir(outDir);
-end
+% outDir = "images";
+% if ~exist(outDir, "dir")
+%     mkdir(outDir);
+% end
 
 
 

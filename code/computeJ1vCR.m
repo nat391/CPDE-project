@@ -2,7 +2,7 @@ function [j1] = computeJ1vCR(s4e,pos4n,n4sDb,counts_per_node,vCR)
 % this function computes the coefficients of the J1 operator applied to a
 % Crouzeix-Raviart function.
 % It averages the nodal values from neighboring triangles and returns a
-% vector of length size(c4n,1)
+% vector of length size(c4n,1. Boundary nodes are explicitly set to zero.
 % inputs: s4e               nr_elems x 3 matrix from computeS4e
 %         pos4n             nr_nodes x 3nr_nodes matrix from computePos4n
 %         n4sDb             |nr_dirichtetNodes| x 2 matrix that gives the
@@ -24,7 +24,7 @@ s4e = s4e(:,[2 3 1]);
 Z = sum(vCR(s4e),2)*ones(1,3)- 2*vCR(s4e);
 
 % Flatten Z so positions align
-Z_long   = Z(:);      % same ordering
+Z_long = Z(:);      % same ordering
 
 % Sum Z contributions for each node (vectorized via sparse mat-vec)
 % we can do: sums(node) = sum of Z_long at positions where node occurs

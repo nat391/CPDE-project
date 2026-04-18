@@ -22,5 +22,5 @@ pos_idx = (1:nr_positions)';  % column indices (positions)
 pos4n = sparse(node_idx, pos_idx, 1, nr_nodes, nr_positions);  % (nr_nodes x nr_positions)
 
 % Count occurrences per node
-counts_per_node = sum(pos4n, 2); % (nr_nodes x 1)
+counts_per_node = full(sum(pos4n, 2)); % (nr_nodes x 1)
 end
