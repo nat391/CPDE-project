@@ -1,11 +1,12 @@
-function CRPoisson_lineload_adaptive(geometry, nodes_line, max_level, lineload, degree, OPTname)
+function CRPoisson_lineload_adaptive(geometry, nodes_line, min_ndof, lineload, degree)
 %% This function solves the Poisson-model problem for a lineload on the rhs
 %% using the smoother J. It also plots the convergence rates. 
 % input: geometry               string - geometry to use, must be a name of 
 %                               a geometry from AFEMs geometries folder.
 %        nodes_line             vector of length nr_nodes_on_line with
 %                               nodes on the line where lineload is applied
-%        max_level              integer - maximum refinement level to comp.
+%        min_ndof               integer - minimum degrees of freedom to
+%                               reach before terminating
 %        lineload               function handle for the lineload that is
 %                               applied along the edges connected by
 %                               nodes_line
@@ -39,14 +40,14 @@ n4sDb = sort(n4sDb,2);
 sides_nodepatch_line = sides_nodepatch_line(~isMatch);
 
 % initialize error4lvl and ndof4lvl
-error4lvl = zeros(max_level,1);
-error4lvl_jumpterm = zeros(max_level,1);
-ndof4lvl = zeros(max_level,1);
+eta4ndof = sparse(1,1);
+eta4ndof_lineterm = sparse(1,1);
+eta4ndof_jumpterm = sparse(1,1);
 
 % set Dirichlet boundary conditions
 u4Db = @(x) 0;
 
-for level = 1:max_level
+while (true)
 
     % useful constants
     nr_sides = size(n4s,1);
@@ -73,47 +74,47 @@ for level = 1:max_level
     b = zeros(nr_sides,1);
     b(sides_nodepatch_line) = b_local;
   
-    [uCR, ndof4lvl(level)] = solveCRPoisson_exactRHS(b,u4Db,c4n,n4e,n4sDb);
+    [uCR,ndof] = solveCRPoisson_exactRHS(b,u4Db,c4n,n4e,n4sDb);
 
     %% estimate
     eta4s_lineterm = estimate_lineterm(c4n,n4s_line,length4s_line,lineload,degree);
     eta4s_jumpterm = estimate_CRjumpterm(u4Db,uCR,c4n,n4e,n4s,s4e,n4sDb);
     
-    error4lvl_jumpterm(level) = sqrt(sum(eta4s_jumpterm));
-    error4lvl(level) = sqrt(sum(eta4s_jumpterm) + sum(eta4s_lineterm));
+    eta4ndof_lineterm(ndof) = sqrt(sum(eta4s_lineterm));
+    eta4ndof_jumpterm(ndof) = sqrt(sum(eta4s_jumpterm));
+    eta4ndof(ndof) = sqrt(sum(eta4s_jumpterm) + sum(eta4s_lineterm));
+    
+    % break if minimum degrees of freedom were reached. Else, continue.
+    if ndof >= min_ndof, break, end
 
-    if(level < max_level)
+    %% mark
+    eta4s = zeros(nr_sides,1);
+    eta4s(sides_line) = eta4s_lineterm;
+    eta4s = eta4s + eta4s_jumpterm;
+    n4sMarked = markBulk(n4s,eta4s);
 
-        %% mark
-        eta4s = zeros(nr_sides);
-        eta4s(sides_line) = eta4s_lineterm;
-        eta4s = eta4s + eta4s_jumpterm;
-        n4sMarked = markBulk(n4s,eta4s);
+    %% refine
+    [c4n,n4e,nodes_line,n4sDb] = refineRGB_with_line(c4n,n4e,nodes_line,sides_line,n4sDb,n4sMarked);
+    
+    % compute helpers again
+    nr_nodes = size(c4n,1);
+    n4s = computeN4s(n4e);
+    s4e = computeS4e(n4e);
+    [pos4n,counts_per_node] = computePos4n(n4e,nr_nodes);
 
-        %% refine
-        [c4n,n4e,nodes_line,n4sDb] = refineRGB_with_line(c4n,n4e,nodes_line,sides_line,n4sDb,n4sMarked);
-        
-        % compute helpers again
-        nr_nodes = size(c4n,1);
-        n4s = computeN4s(n4e);
-        s4e = computeS4e(n4e);
-        [pos4n,counts_per_node] = computePos4n(n4e,nr_nodes);
-
-        % find nodes and sides on the line and get their length
-        sides_line = find(all(ismember(n4s,nodes_line),2));
-        n4s_line = n4s(sides_line,:);
-        length4s_line = computeLength4s(c4n,n4s_line);
-        
-        % get sides of the nodepatches around the line nodes
-        sides_nodepatch_line = computeSides_nodepatch(nodes_line,pos4n,s4e);
-        
-        % exclude boundary sides
-        n4s_nodepatch_line = sort(n4s(sides_nodepatch_line,:),2);
-        n4sDb = sort(n4sDb,2);
-        [isMatch, ~] = ismember(n4s_nodepatch_line,n4sDb,'rows');
-        sides_nodepatch_line = sides_nodepatch_line(~isMatch);
-        
-    end
+    % find nodes and sides on the line and get their length
+    sides_line = find(all(ismember(n4s,nodes_line),2));
+    n4s_line = n4s(sides_line,:);
+    length4s_line = computeLength4s(c4n,n4s_line);
+    
+    % get sides of the nodepatches around the line nodes
+    sides_nodepatch_line = computeSides_nodepatch(nodes_line,pos4n,s4e);
+    
+    % exclude boundary sides
+    n4s_nodepatch_line = sort(n4s(sides_nodepatch_line,:),2);
+    n4sDb = sort(n4sDb,2);
+    [isMatch, ~] = ismember(n4s_nodepatch_line,n4sDb,'rows');
+    sides_nodepatch_line = sides_nodepatch_line(~isMatch);
 
 end
 
@@ -123,20 +124,28 @@ plotTriangulation(c4n,n4e);
 
 % ---- plot solution ----
 figSolution = figure;
-plotCR(c4n,n4e,uCR,OPTname);
+plotCR(c4n,n4e,uCR);
 
 % ---- plot convergence ----
+ndof4lvl = find(eta4ndof);
+eta4lvl_lineterm = eta4ndof_lineterm(ndof4lvl);
+eta4lvl_jumpterm = eta4ndof_jumpterm(ndof4lvl);
+eta4lvl = eta4ndof(ndof4lvl);
 figConvergence = figure;
 
-plotConvergence(ndof4lvl, error4lvl, "\eta_l");
+plotConvergence(ndof4lvl, eta4lvl_lineterm, "\eta_{l,line}");
 hold on
 
-plotConvergence(ndof4lvl, error4lvl_jumpterm, "\eta_{l,jump}");
+plotConvergence(ndof4lvl, eta4lvl_jumpterm, "\eta_{l,jump}");
+hold on
 
-scaling1 = error4lvl(max_level) / (ndof4lvl(max_level)^(-0.25)) * 1.5;
-scaling2 = error4lvl_jumpterm(max_level) / (ndof4lvl(max_level)^(-0.5)) * 1.4;
+plotConvergence(ndof4lvl, eta4lvl, "\eta_l");
+hold on
 
-loglog(ndof4lvl, scaling1 * ndof4lvl.^(-0.25), 'k--', 'DisplayName', 's=-0.25');
+%scaling1 = error4lvl(max_level) / (ndof4lvl(max_level)^(-0.25)) * 1.5;
+scaling2 = eta4ndof_jumpterm(end) / (ndof4lvl(end)^(-0.5)) * 1.4;
+
+%loglog(ndof4lvl, scaling1 * ndof4lvl.^(-0.25), 'k--', 'DisplayName', 's=-0.25');
 loglog(ndof4lvl, scaling2 * ndof4lvl.^(-0.5), 'k--', 'DisplayName', 's=-0.5');
 
 xlabel('ndof')
@@ -172,8 +181,3 @@ savefig(figConvergence, [filenameConv '.fig']);   % MATLAB Figure
 exportgraphics(figConvergence, [filenameConv '.png']);
 
 disp('Plots erfolgreich gespeichert.');
-
-
-
-
-

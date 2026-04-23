@@ -9,7 +9,7 @@ function [j1] = computeJ1psi(s4e,pos4n,n4sDb,counts_per_node,side)
 %                           two nodes for each boundary edge
 %         counts_per_node   nr_nodes long vector with the count of 
 %                           occurences in n4e
-%         i                 integer i which is the side index (as in s4e)
+%         side              integer which is the side index (as in s4e)
 %                           where the CR basis function is 1
 %
 % output: j1                nr_nodes long vector with the coefficients
