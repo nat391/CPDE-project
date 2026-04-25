@@ -3,7 +3,7 @@ function main
 % The domain is the big square (-1,1)^2 with the line (0,1)x{0}. The three
 % lineloads are 1, 1-2x and exp(-x). 
 addpath(genpath(pwd));
-min_ndof = 10^6;
+min_ndof = 10^5;
 geometry = 'BigSquare';
 c4n = loadGeometry(geometry);
 nodes_line = find(c4n(:,1)>=0 & c4n(:,2)==0);

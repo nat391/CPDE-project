@@ -20,6 +20,7 @@ function CRPoisson_lineload_adaptive(geometry, nodes_line, min_ndof, lineload, d
 % initialize mesh and useful helpers
 [c4n, n4e, n4sDb, ~] = loadGeometry(geometry);
 nr_nodes = size(c4n,1);
+dirichlet_nodes = unique(n4sDb(:));
 n4s = computeN4s(n4e);
 s4e = computeS4e(n4e);
 [pos4n, counts_per_node] = computePos4n(n4e,nr_nodes);
@@ -54,30 +55,21 @@ while (true)
     nr_sides_nodepatch_line = length(sides_nodepatch_line);
 
     %% solve
-
-    % compute the RHS where non-zero
-    b_local = zeros(nr_sides_nodepatch_line,1);
-
-    parfor k = 1:nr_sides_nodepatch_line
-
-        side = sides_nodepatch_line(k);
-
-        %compute coefficients for J3vCR    
-        j1 = computeJ1psi(s4e,pos4n,n4sDb,counts_per_node,side);
-        j2 = computeJ2psi(n4s,side,j1);
-        
-        % intergrate J3vCR over the slit
-        b_local(k) = integrateJ3vCR_lineload(c4n,n4s_line,sides_line,j1,j2,lineload,degree+2);
-    end
     
-    % scatter back to full rhs vector b
     b = zeros(nr_sides,1);
-    b(sides_nodepatch_line) = b_local;
+
+    %compute coefficients for J3vCR in a vectorized manner
+    j1_all = computeJ1psi(s4e,pos4n,dirichlet_nodes,counts_per_node,...
+                                                     sides_nodepatch_line);
+    j2_all = computeJ2psi(n4s,sides_nodepatch_line,j1_all);
+    b(sides_nodepatch_line) = integrateJ3psi_lineload(...
+                  c4n,n4s_line,sides_line,j1_all,j2_all,lineload,degree+2);
   
     [uCR,ndof] = solveCRPoisson_exactRHS(b,u4Db,c4n,n4e,n4sDb);
 
     %% estimate
-    eta4s_lineterm = estimate_lineterm(c4n,n4s_line,length4s_line,lineload,degree);
+    eta4s_lineterm = estimate_lineterm(c4n,n4s_line,length4s_line,...
+                                                          lineload,degree);
     eta4s_jumpterm = estimate_CRjumpterm(u4Db,uCR,c4n,n4e,n4s,s4e,n4sDb);
     
     eta4ndof_lineterm(ndof) = sqrt(sum(eta4s_lineterm));

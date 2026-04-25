@@ -31,7 +31,7 @@ function [x,nrDof,A,b] = solveCRPoisson_exactRHS(b,u4Db,c4n,n4e,n4sDb)
     nrDof = length(dof);
     
     Alocal = zeros(3,3,nrElems);
-    %% Create the stiffness matrix A and right-hand side b
+    %% Create the stiffness matrix A
     for elem = 1 : nrElems
         nodes = n4e(elem,:);   % nodes of this element
         coords = c4n(nodes,:); % coordinates for the nodes
