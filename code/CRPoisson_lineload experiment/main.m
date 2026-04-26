@@ -14,13 +14,13 @@ degree = 0;
 CRPoisson_lineload_adaptive(geometry,nodes_line,min_ndof,lineload,degree);
 
 % second experiment
-lineload = @(x) 1-2*x(:,1);
-degree = 2;
-CRPoisson_lineload_adaptive(geometry,nodes_line,min_ndof,lineload,degree);
-
-%third experiment
-lineload = @(x) exp(-x(:,1));
-degree = 10;
-CRPoisson_lineload_adaptive(geometry,nodes_line,min_ndof,lineload,degree);
+% lineload = @(x) 1-2*x(:,1);
+% degree = 2;
+% CRPoisson_lineload_adaptive(geometry,nodes_line,min_ndof,lineload,degree);
+% 
+% %third experiment
+% lineload = @(x) exp(-x(:,1));
+% degree = 10;
+% CRPoisson_lineload_adaptive(geometry,nodes_line,min_ndof,lineload,degree);
 
 end

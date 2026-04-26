@@ -17,7 +17,6 @@ function CRPoisson_lineload_adaptive(geometry, nodes_line, min_ndof, lineload, d
 
 %% initialization
 
-% initialize mesh and useful helpers
 [c4n, n4e, n4sDb, ~] = loadGeometry(geometry);
 nr_nodes = size(c4n,1);
 dirichlet_nodes = unique(n4sDb(:));
@@ -44,15 +43,17 @@ sides_nodepatch_line = sides_nodepatch_line(~isMatch);
 eta4ndof = sparse(1,1);
 eta4ndof_lineterm = sparse(1,1);
 eta4ndof_jumpterm = sparse(1,1);
+error4lvl = [];
+energy4lvl = [];
 
 % set Dirichlet boundary conditions
 u4Db = @(x) 0;
 
+%% AFEM loop
 while (true)
 
     % useful constants
     nr_sides = size(n4s,1);
-    nr_sides_nodepatch_line = length(sides_nodepatch_line);
 
     %% solve
     
@@ -66,6 +67,11 @@ while (true)
                   c4n,n4s_line,sides_line,j1_all,j2_all,lineload,degree+2);
   
     [uCR,ndof] = solveCRPoisson_exactRHS(b,u4Db,c4n,n4e,n4sDb);
+
+    %Exact error
+    error4lvl(end+1) = sqrt(sum(error4eCRL2(c4n,n4e,@uExact_1,uCR)));
+    %Energy error
+    energy4lvl(end+1) = sqrt(sum(error4eCREnergy(c4n,n4e,@gradExact_1,uCR)));
 
     %% estimate
     eta4s_lineterm = estimate_lineterm(c4n,n4s_line,length4s_line,...
@@ -134,11 +140,16 @@ hold on
 plotConvergence(ndof4lvl, eta4lvl, "\eta_l");
 hold on
 
+plotConvergence(ndof4lvl,error4lvl,'L2-Error');
+hold on
+plotConvergence(ndof4lvl,energy4lvl,'Energy-Error');
+hold on
+
 %scaling1 = error4lvl(max_level) / (ndof4lvl(max_level)^(-0.25)) * 1.5;
 scaling2 = eta4ndof_jumpterm(end) / (ndof4lvl(end)^(-0.5)) * 1.4;
 
 %loglog(ndof4lvl, scaling1 * ndof4lvl.^(-0.25), 'k--', 'DisplayName', 's=-0.25');
-loglog(ndof4lvl, scaling2 * ndof4lvl.^(-0.5), 'k--', 'DisplayName', 's=-0.5');
+loglog(ndof4lvl, scaling2 * ndof4lvl.^(-0.5), 'k--', 'DisplayName', 's= -0.5');
 
 xlabel('ndof')
 legend('show');
